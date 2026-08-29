@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>Label</key>
+	<string>com.wilfrid.B.apple-calendar-mcp.agent</string>
+	<!-- Path relative to the containing app bundle, per SMAppService. -->
+	<key>BundleProgram</key>
+	<string>Contents/MacOS/apple-calendar-mcp</string>
+	<key>ProgramArguments</key>
+	<array>
+		<string>apple-calendar-mcp</string>
+		<string>--selftest</string>
+		<string>--request</string>
+	</array>
+	<key>RunAtLoad</key>
+	<true/>
+	<key>StandardOutPath</key>
+	<string>/private/tmp/claude-501/-Users-wilfrid-Documents-App-IOS-suiviSante--claude-worktrees-cranky-lamarr-1fc326/68c81a25-713b-4ce1-8d56-aafec52af704/scratchpad/agent-selftest.out</string>
+	<key>StandardErrorPath</key>
+	<string>/private/tmp/claude-501/-Users-wilfrid-Documents-App-IOS-suiviSante--claude-worktrees-cranky-lamarr-1fc326/68c81a25-713b-4ce1-8d56-aafec52af704/scratchpad/agent-selftest.err</string>
+</dict>
+</plist>

@@ -1,0 +1,8 @@
+.build/
+.swiftpm/
+*.xcodeproj
+dist/
+.DS_Store
+
+# Local configuration may name private calendars.
+config.json
