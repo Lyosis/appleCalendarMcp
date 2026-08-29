@@ -3,11 +3,11 @@
 <plist version="1.0">
 <dict>
 	<key>CFBundleIdentifier</key>
-	<string>com.wilfrid.B.apple-calendar-mcp</string>
+	<string>com.wilfrid.B.apple-calendar-mcp.bridge</string>
 	<key>CFBundleName</key>
-	<string>apple-calendar-mcp</string>
+	<string>apple-calendar-mcp-bridge</string>
 	<key>CFBundleExecutable</key>
-	<string>apple-calendar-mcp</string>
+	<string>apple-calendar-mcp-bridge</string>
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<!-- Kept in step with serverVersion by --selftest, which fails on drift. -->
@@ -17,11 +17,5 @@
 	<string>1</string>
 	<key>LSMinimumSystemVersion</key>
 	<string>14.4</string>
-	<!-- Deliberately not LSBackgroundOnly: the process must be allowed to
-	     present the system permission prompt. -->
-	<key>LSUIElement</key>
-	<true/>
-	<key>NSCalendarsFullAccessUsageDescription</key>
-	<string>apple-calendar-mcp lets Claude read your calendars and create, edit or delete events on your behalf.</string>
 </dict>
 </plist>

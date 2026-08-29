@@ -7,17 +7,19 @@
 	<!-- Path relative to the containing app bundle, per SMAppService. -->
 	<key>BundleProgram</key>
 	<string>Contents/MacOS/apple-calendar-mcp</string>
+	<!-- launchd refuses the job with EX_CONFIG when this is absent, even though
+	     BundleProgram already names the executable. Measured, not guessed. -->
 	<key>ProgramArguments</key>
 	<array>
 		<string>apple-calendar-mcp</string>
-		<string>--selftest</string>
-		<string>--request</string>
 	</array>
-	<key>RunAtLoad</key>
-	<true/>
-	<key>StandardOutPath</key>
-	<string>/private/tmp/claude-501/-Users-wilfrid-Documents-App-IOS-suiviSante--claude-worktrees-cranky-lamarr-1fc326/68c81a25-713b-4ce1-8d56-aafec52af704/scratchpad/agent-selftest.out</string>
-	<key>StandardErrorPath</key>
-	<string>/private/tmp/claude-501/-Users-wilfrid-Documents-App-IOS-suiviSante--claude-worktrees-cranky-lamarr-1fc326/68c81a25-713b-4ce1-8d56-aafec52af704/scratchpad/agent-selftest.err</string>
+	<!-- Advertised on demand: launchd starts the helper on the first message
+	     and not before, so it is not running while nobody is using it.
+	     Must stay identical to machServiceName in Sources/AppleCalendarIPC. -->
+	<key>MachServices</key>
+	<dict>
+		<key>com.wilfrid.B.apple-calendar-mcp.agent</key>
+		<true/>
+	</dict>
 </dict>
 </plist>

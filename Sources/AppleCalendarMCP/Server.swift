@@ -1,51 +1,49 @@
+import AppleCalendarIPC
 import Foundation
 
 /// MCP revisions this server can speak, newest first.
 private let supportedProtocolVersions = ["2025-06-18", "2025-03-26", "2024-11-05"]
 
-/// The MCP server: reads newline-delimited JSON-RPC from stdin, answers on
-/// stdout, and keeps every side effect behind `CalendarAccess`.
+/// The MCP server. Transport-agnostic on purpose: the same actor serves XPC in
+/// production and stdio in development, and every side effect stays behind
+/// `CalendarAccess`.
 actor Server {
     private let calendar = CalendarAccess()
-    private let output = StdoutWriter()
-
-    func run() async {
-        do {
-            for try await line in FileHandle.standardInput.bytes.lines {
-                let message = line.trimmingCharacters(in: .whitespacesAndNewlines)
-                guard !message.isEmpty else { continue }
-                await handle(message)
-            }
-        } catch {
-            log("stdin ended with an error: \(error)")
-        }
-    }
 
     // MARK: - Dispatch
 
-    private func handle(_ message: String) async {
+    /// Handles one JSON-RPC message and returns the reply to send back, or nil
+    /// when the message was a notification, which must never be answered.
+    func respond(to message: String) async -> String? {
         let request: RPCRequest
         do {
             request = try JSONDecoder().decode(RPCRequest.self, from: Data(message.utf8))
         } catch {
-            await output.send(RPCResponse.failure(id: .null, error: .parseError()))
-            return
+            return encode(RPCResponse.failure(id: .null, error: .parseError()))
         }
 
-        // A notification carries no id and must never be answered, not even on
-        // failure.
-        guard let id = request.id else { return }
+        guard let id = request.id else { return nil }
 
         do {
             let result = try await perform(request)
-            await output.send(RPCResponse.success(id: id, result: result))
+            return encode(RPCResponse.success(id: id, result: result))
         } catch let error as RPCError {
-            await output.send(RPCResponse.failure(id: id, error: error))
+            return encode(RPCResponse.failure(id: id, error: error))
         } catch {
-            await output.send(
+            return encode(
                 RPCResponse.failure(id: id, error: .internalError(error.localizedDescription))
             )
         }
+    }
+
+    private func encode(_ value: JSONValue) -> String? {
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.withoutEscapingSlashes]
+        guard let data = try? encoder.encode(value) else {
+            log("dropped a reply that could not be encoded")
+            return nil
+        }
+        return String(decoding: data, as: UTF8.self)
     }
 
     private func perform(_ request: RPCRequest) async throws -> JSONValue {

@@ -1,3 +1,4 @@
+import AppleCalendarIPC
 import Foundation
 
 let arguments = Set(CommandLine.arguments.dropFirst())
@@ -13,7 +14,12 @@ if arguments.contains("--help") || arguments.contains("-h") {
         An MCP server for the Calendar app on macOS, iCloud calendars included.
 
         Usage:
-          apple-calendar-mcp              Serve MCP over stdio (how a client runs it).
+          apple-calendar-mcp              Serve MCP over XPC. This is how launchd starts
+                                          the agent; MCP clients run the bridge instead.
+          apple-calendar-mcp --serve-stdio
+                                          Serve MCP over stdin/stdout. Development only —
+                                          a client that spawns this is never granted
+                                          calendar access. See the README.
           apple-calendar-mcp --selftest   Report identity, permission state and visible
                                           calendars. Exits non-zero if anything is wrong.
           apple-calendar-mcp --request    With --selftest, ask for calendar access,
@@ -45,4 +51,10 @@ if arguments.contains("--selftest") {
     exit(passed ? 0 : 1)
 }
 
-await Server().run()
+if arguments.contains("--serve-stdio") {
+    await runStdioService(server: Server())
+    exit(0)
+}
+
+// No arguments: this is how launchd starts the agent.
+runXPCService(server: Server())

@@ -53,7 +53,10 @@ scope of what the helper will do is limited by configuration. See
 
 ## Requirements
 
-- macOS 14 or later (`requestFullAccessToEvents` is macOS 14+)
+- macOS 14.4 or later, set by the most demanding API used:
+  `xpc_connection_set_peer_team_identity_requirement`, which lets the helper
+  accept only peers signed by the same team as itself — so you can build and
+  sign this with your own certificate, with no team identifier to edit
 - Apple Silicon
 
 ## Building
@@ -61,6 +64,31 @@ scope of what the helper will do is limited by configuration. See
 ```sh
 swift build
 ```
+
+## Development
+
+launchd resolves the agent to the path the helper app had **when it was
+registered**. Rebuilding into a different directory, or deleting the bundle
+without unregistering first, leaves launchd pointing at a path that no longer
+exists. It then refuses the job with `EX_CONFIG`, and the only visible symptom
+is that the bridge never receives a reply — `launchctl print` will still show
+the *new* bundle identifier while resolving the *old* path, so trust the
+launchd log rather than the printed state.
+
+Unregister before moving or rebuilding the bundle:
+
+```sh
+AppleCalendarMCP.app/Contents/MacOS/apple-calendar-mcp --unregister-agent
+```
+
+If a stale registration survives that, remove the job from the domain:
+
+```sh
+launchctl bootout gui/$UID/com.wilfrid.B.apple-calendar-mcp.agent
+```
+
+For the same reason, install the helper app at its final location before
+registering it the first time.
 
 ## Checking your machine
 
