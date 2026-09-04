@@ -91,8 +91,28 @@ out what each check covers, and the four things none of them do.
 ## Building
 
 ```sh
-swift build
+Scripts/build-app.sh --sign "Your Developer ID"     # builds and installs to ~/Applications
+"$HOME/Applications/AppleCalendarMCP.app/Contents/MacOS/apple-calendar-mcp" --register-agent
+"$HOME/Applications/AppleCalendarMCP.app/Contents/MacOS/apple-calendar-mcp" --pin-client-auto
 ```
+
+Then point your MCP client at
+`~/Applications/AppleCalendarMCP.app/Contents/MacOS/apple-calendar-mcp-bridge`.
+
+`swift build` alone produces the two executables but not the bundle, and the
+helper cannot obtain calendar access outside one.
+
+Two things the build script handles that are easy to get wrong by hand:
+
+- **It stages in `/tmp`.** A checkout inside iCloud Drive — `~/Documents` and
+  `~/Desktop` are synced by default — collects `com.apple.FinderInfo` and file
+  provider attributes that `codesign` refuses, and that come straight back after
+  `xattr -c`.
+- **It signs the executables inside out.** Signing the bundle seals a second
+  executable in `Contents/MacOS` as a nested resource *without re-signing it*,
+  so the bridge keeps SwiftPM's ad-hoc signature and the helper then refuses it
+  for having no team identifier. `codesign --verify --strict` passes anyway, so
+  the script compares the team identifier of every executable instead.
 
 ## Development
 

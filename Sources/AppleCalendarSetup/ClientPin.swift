@@ -1,14 +1,14 @@
 import Foundation
 import Security
 
-enum PinError: LocalizedError {
+public enum PinError: LocalizedError {
     case unreadable(String)
     case noRequirement(String)
     case notAnApplication(String)
     case keychain(OSStatus)
     case malformed(String)
 
-    var errorDescription: String? {
+    public var errorDescription: String? {
         switch self {
         case .unreadable(let path):
             "Cannot read a code signature at \(path)."
@@ -29,16 +29,15 @@ enum PinError: LocalizedError {
 /// Stored in the keychain rather than a file on purpose: a file under the
 /// person's home is writable by anything running as them, so an attacker could
 /// simply replace the pin with their own identity and walk in. A keychain item
-/// is bound to the code that created it, and another program reading it has to
-/// get past the system, in front of the person.
-enum ClientPin {
+/// is bound to the code that created it.
+public enum ClientPin {
     private static let service = "com.wilfrid.B.apple-calendar-mcp"
     private static let account = "pinned-client-requirement"
 
     // MARK: - Reading
 
     /// The pinned requirement, or nil when nothing is pinned.
-    static func requirementText() -> String? {
+    public static func requirementText() -> String? {
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
@@ -55,12 +54,12 @@ enum ClientPin {
         return String(decoding: data, as: UTF8.self)
     }
 
-    static func compiled() -> SecRequirement? {
+    public static func compiled() -> SecRequirement? {
         guard let text = requirementText() else { return nil }
         return compile(text)
     }
 
-    static func compile(_ text: String) -> SecRequirement? {
+    public static func compile(_ text: String) -> SecRequirement? {
         var requirement: SecRequirement?
         guard SecRequirementCreateWithString(text as CFString, [], &requirement) == errSecSuccess
         else {
@@ -71,14 +70,15 @@ enum ClientPin {
 
     // MARK: - Writing
 
-    static func pin(applicationAt path: String) throws -> String {
+    @discardableResult
+    public static func pin(applicationAt path: String) throws -> String {
         let text = try designatedRequirement(ofBundleAt: path)
         guard compile(text) != nil else { throw PinError.malformed(text) }
         try store(text)
         return text
     }
 
-    static func unpin() throws {
+    public static func unpin() throws {
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
@@ -108,7 +108,7 @@ enum ClientPin {
     /// Taking the application's own requirement rather than composing one by
     /// hand means the pin says exactly what the system means by "this app",
     /// including its team, and stays right when certificates rotate.
-    static func designatedRequirement(ofBundleAt path: String) throws -> String {
+    public static func designatedRequirement(ofBundleAt path: String) throws -> String {
         guard path.hasSuffix(".app") else { throw PinError.notAnApplication(path) }
 
         var staticCode: SecStaticCode?

@@ -1,4 +1,5 @@
 import AppleCalendarIPC
+import AppleCalendarSetup
 import Foundation
 
 let argumentList = Array(CommandLine.arguments.dropFirst())
@@ -74,15 +75,15 @@ if arguments.contains("--unpin-client") {
 }
 
 if arguments.contains("--register-agent") {
-    exit(ServiceControl.register() ? 0 : 1)
+    exit(AgentCommands.register() ? 0 : 1)
 }
 
 if arguments.contains("--unregister-agent") {
-    exit(ServiceControl.unregister() ? 0 : 1)
+    exit(AgentCommands.unregister() ? 0 : 1)
 }
 
 if arguments.contains("--agent-status") {
-    exit(ServiceControl.status() ? 0 : 1)
+    exit(AgentCommands.status() ? 0 : 1)
 }
 
 if arguments.contains("--selftest") {

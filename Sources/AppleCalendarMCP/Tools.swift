@@ -1,4 +1,5 @@
 import AppleCalendarIPC
+import AppleCalendarSetup
 import EventKit
 import Foundation
 
@@ -179,7 +180,7 @@ extension Server {
     // MARK: - Access
 
     private func checkAccess(_ arguments: JSONValue) async -> JSONValue {
-        var state = CalendarAccess.currentState()
+        var state = CalendarPermission.current()
         var prompted = false
 
         if arguments["request"]?.boolValue == true, state == .notDetermined {
@@ -202,7 +203,7 @@ extension Server {
 
     /// EventKit has no read-only level: reading anything needs full access.
     private func ensureAccess() async throws {
-        var state = CalendarAccess.currentState()
+        var state = CalendarPermission.current()
         if state == .notDetermined {
             state = await calendar.requestAccess().state
             await calendar.reset()

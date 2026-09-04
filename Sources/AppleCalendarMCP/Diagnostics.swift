@@ -1,3 +1,4 @@
+import AppleCalendarSetup
 import Darwin
 import EventKit
 import Foundation
@@ -59,7 +60,7 @@ func runSelfTest(requestAccess: Bool) async -> Bool {
     // MARK: Authorization — recorded status, before and after
 
     print("authorization")
-    let stateBefore = CalendarAccess.currentState()
+    let stateBefore = CalendarPermission.current()
     check("status before", stateBefore.rawValue, ok: nil)
 
     let access = CalendarAccess()
@@ -75,7 +76,7 @@ func runSelfTest(requestAccess: Bool) async -> Bool {
         print("  ...  no decision recorded; re-run with --request to prompt")
     }
 
-    let stateAfter = CalendarAccess.currentState()
+    let stateAfter = CalendarPermission.current()
     check("status after", stateAfter.rawValue, ok: stateAfter.canRead)
     check("meaning", stateAfter.explanation, ok: nil)
     print("")
@@ -105,7 +106,7 @@ func runSelfTest(requestAccess: Bool) async -> Bool {
     }
 
     // A test whose conditions changed while it ran proves nothing.
-    let stateAtEnd = CalendarAccess.currentState()
+    let stateAtEnd = CalendarPermission.current()
     check(
         "status unchanged during run",
         stateAtEnd == stateAfter ? "\(stateAtEnd.rawValue)" : "CHANGED: \(stateAfter.rawValue) -> \(stateAtEnd.rawValue)",

@@ -1,3 +1,4 @@
+import AppleCalendarSetup
 import Foundation
 
 /// The command-line side of client pinning.
@@ -42,7 +43,7 @@ enum PinCommands {
             print("  FAILED          No application above this process to pin.")
             print("                  Run this from inside your MCP client, or pass")
             print("                  --pin-client /path/to/Client.app instead.")
-            print("  ancestors       \(ancestorSummary())")
+            print("  ancestors       \(Ancestry.summary())")
             return false
         }
         print("  detected        \(path)")
@@ -58,11 +59,5 @@ enum PinCommands {
             print("  FAILED          \(error.localizedDescription)")
             return false
         }
-    }
-
-    private static func ancestorSummary() -> String {
-        Ancestry.chain(from: getpid())
-            .compactMap { Ancestry.path(of: $0) }
-            .joined(separator: " <- ")
     }
 }

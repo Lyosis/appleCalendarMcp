@@ -44,9 +44,17 @@ let package = Package(
             path: "Sources/AppleCalendarIPC",
             swiftSettings: strictConcurrency
         ),
+        // Permission, agent registration and client pinning: everything the
+        // installer window and the helper both need. Shared rather than
+        // duplicated, so there is one implementation of the security checks.
+        .target(
+            name: "AppleCalendarSetup",
+            path: "Sources/AppleCalendarSetup",
+            swiftSettings: strictConcurrency
+        ),
         .executableTarget(
             name: "AppleCalendarMCP",
-            dependencies: ["AppleCalendarIPC"],
+            dependencies: ["AppleCalendarIPC", "AppleCalendarSetup"],
             path: "Sources/AppleCalendarMCP",
             swiftSettings: strictConcurrency,
             linkerSettings: embeddedPlist("Resources/Info.plist")

@@ -7,10 +7,10 @@ import Security
 /// This is what stops someone simply running the bridge themselves: the peer
 /// may be correctly signed and still have been started by anything at all, so
 /// the question worth asking is who is above it.
-enum Ancestry {
+public enum Ancestry {
 
     /// Process ids from `pid` upwards, stopping at launchd.
-    static func chain(from pid: pid_t, maximum: Int = 16) -> [pid_t] {
+    public static func chain(from pid: pid_t, maximum: Int = 16) -> [pid_t] {
         var chain: [pid_t] = []
         var current = pid
         while current > 1, chain.count < maximum {
@@ -21,7 +21,7 @@ enum Ancestry {
         return chain
     }
 
-    static func parent(of pid: pid_t) -> pid_t? {
+    public static func parent(of pid: pid_t) -> pid_t? {
         var info = kinfo_proc()
         var size = MemoryLayout<kinfo_proc>.stride
         var mib: [Int32] = [CTL_KERN, KERN_PROC, KERN_PROC_PID, pid]
@@ -29,7 +29,7 @@ enum Ancestry {
         return info.kp_eproc.e_ppid
     }
 
-    static func path(of pid: pid_t) -> String? {
+    public static func path(of pid: pid_t) -> String? {
         var buffer = [UInt8](repeating: 0, count: Int(MAXPATHLEN))
         let length = proc_pidpath(pid, &buffer, UInt32(buffer.count))
         guard length > 0 else { return nil }
@@ -40,9 +40,9 @@ enum Ancestry {
     ///
     /// Identifying by process id carries a reuse race for ancestors, which may
     /// have exited: the direct peer is safe, because an open XPC connection
-    /// keeps it alive, but a grandparent is not. Documented in SECURITY.md
-    /// rather than papered over.
-    static func satisfies(pid: pid_t, requirement: SecRequirement) -> Bool {
+    /// keeps it alive, but a grandparent is not. Stated in SECURITY.md rather
+    /// than papered over.
+    public static func satisfies(pid: pid_t, requirement: SecRequirement) -> Bool {
         var code: SecCode?
         let attributes = [kSecGuestAttributePid: NSNumber(value: pid)] as CFDictionary
         guard SecCodeCopyGuestWithAttributes(nil, attributes, [], &code) == errSecSuccess,
@@ -54,7 +54,7 @@ enum Ancestry {
     }
 
     /// The application bundle a process's executable lives in, if any.
-    static func bundlePath(forExecutable path: String) -> String? {
+    public static func bundlePath(forExecutable path: String) -> String? {
         guard let range = path.range(of: ".app/Contents/MacOS/") else { return nil }
         return String(path[path.startIndex..<range.lowerBound]) + ".app"
     }
@@ -63,7 +63,7 @@ enum Ancestry {
     ///
     /// Used by --pin-client-auto: whoever is running us is, by construction,
     /// whoever is installing us.
-    static func launchingApplication() -> String? {
+    public static func launchingApplication() -> String? {
         var found: String?
         for pid in chain(from: getpid()) {
             if let path = path(of: pid), let bundle = bundlePath(forExecutable: path) {
@@ -71,5 +71,10 @@ enum Ancestry {
             }
         }
         return found
+    }
+
+    /// The ancestry as readable paths, for diagnostics.
+    public static func summary(from pid: pid_t = getpid()) -> String {
+        chain(from: pid).compactMap { path(of: $0) }.joined(separator: " <- ")
     }
 }

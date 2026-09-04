@@ -1,4 +1,5 @@
 import AppleCalendarIPC
+import AppleCalendarSetup
 import Foundation
 import XPC
 

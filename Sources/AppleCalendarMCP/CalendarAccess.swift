@@ -1,37 +1,7 @@
+import AppleCalendarSetup
 import CoreGraphics
 import EventKit
 import Foundation
-
-/// Authorization state for calendar events, in the terms this server reports.
-enum AccessState: String, Sendable {
-    case notDetermined
-    case restricted
-    case denied
-    case writeOnly
-    case fullAccess
-    case unknown
-
-    /// Whether events can be read at all. Write-only access is enough to create
-    /// an event but not to see one, which is a distinction worth surfacing.
-    var canRead: Bool { self == .fullAccess }
-
-    var explanation: String {
-        switch self {
-        case .notDetermined:
-            "No decision has been recorded yet. The system will ask the first time access is requested."
-        case .restricted:
-            "Access is blocked by a policy such as Screen Time or an MDM profile, and cannot be granted here."
-        case .denied:
-            "Access was refused. Grant it in System Settings > Privacy & Security > Calendars."
-        case .writeOnly:
-            "Only event creation is allowed. Reading events needs full access."
-        case .fullAccess:
-            "Full read and write access to calendar events."
-        case .unknown:
-            "The system reported an authorization status this build does not recognize."
-        }
-    }
-}
 
 /// A calendar, flattened into something that can safely cross actor boundaries.
 struct CalendarInfo: Sendable, Equatable {
@@ -61,36 +31,22 @@ struct CalendarInfo: Sendable, Equatable {
 
 /// Owns the single `EKEventStore` and everything that touches it.
 ///
-/// `EKEventStore` and `EKCalendar` are not `Sendable`, so they never leave this
-/// actor: every method converts to a value type before returning. Strict
-/// concurrency enforces that, rather than leaving it to discipline.
+/// `EKEventStore`, `EKCalendar` and `EKEvent` are not `Sendable`, so they never
+/// leave this actor: every method converts to a value type before returning.
+/// Strict concurrency enforces that rather than leaving it to discipline.
 actor CalendarAccess {
     /// Internal rather than private so the operations in CalendarOperations.swift
     /// can reach it. It still never leaves the actor.
     let store = EKEventStore()
 
-    /// The recorded authorization status. Does not prompt.
-    nonisolated static func currentState() -> AccessState {
-        switch EKEventStore.authorizationStatus(for: .event) {
-        case .notDetermined: .notDetermined
-        case .restricted: .restricted
-        case .denied: .denied
-        case .fullAccess: .fullAccess
-        case .writeOnly: .writeOnly
-        @unknown default: .unknown
-        }
-    }
-
-    /// Asks for full access, prompting if the system decides to.
-    ///
-    /// Returns the state as it stands afterwards, which is not always what the
-    /// call returned: reading the status back is the check that can fail.
+    /// Asks for full access on this actor's own store, so that the store which
+    /// will do the reading is the one that saw the grant.
     func requestAccess() async -> (granted: Bool, state: AccessState, error: String?) {
         do {
             let granted = try await store.requestFullAccessToEvents()
-            return (granted, Self.currentState(), nil)
+            return (granted, CalendarPermission.current(), nil)
         } catch {
-            return (false, Self.currentState(), error.localizedDescription)
+            return (false, CalendarPermission.current(), error.localizedDescription)
         }
     }
 
