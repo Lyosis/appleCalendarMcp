@@ -4,9 +4,31 @@ An MCP server that gives Claude access to the Calendar app on macOS — iCloud
 calendars included — the way the Google Calendar connector does, but reading
 the calendar database already on your Mac rather than a web API.
 
-> **Status: work in progress. Not usable yet.**
-> The permission model and the process architecture are settled and verified.
-> The calendar tools are not written. Nothing here is ready to install.
+> **Status: work in progress. Not ready to install.**
+> The architecture, the permission model and all eight tools work end to end,
+> verified against real calendars. What is missing before anyone should install
+> this: the client pinning described under Security, an installer, and
+> notarisation. Until the pinning lands, any process running as you can reach
+> the helper and read or change your calendar.
+
+## Tools
+
+| Tool | |
+|---|---|
+| `check_access` | permission state, and what to do about it |
+| `list_calendars` | every calendar, its identifier, whether it accepts changes |
+| `list_events` | events in a range, recurrences expanded |
+| `search_events` | text across title, location and notes |
+| `find_free_slots` | openings of a given length inside working hours |
+| `create_event` | |
+| `update_event` | only the fields you pass; one occurrence or the series |
+| `delete_event` | one event per call, requires `confirm: true` |
+
+Every change is appended to `~/Library/Logs/apple-calendar-mcp-writes.log`.
+
+Event titles, locations, notes and attendee names are written by other people
+and arrive unfiltered from invitations. Responses carrying them say so, and the
+free-text fields are withheld unless a caller asks for `includeDetails`.
 
 ## Why this is not a plain stdio server
 

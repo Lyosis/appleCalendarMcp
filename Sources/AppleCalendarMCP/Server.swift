@@ -8,7 +8,8 @@ private let supportedProtocolVersions = ["2025-06-18", "2025-03-26", "2024-11-05
 /// production and stdio in development, and every side effect stays behind
 /// `CalendarAccess`.
 actor Server {
-    private let calendar = CalendarAccess()
+    let calendar = CalendarAccess()
+    let journal = WriteJournal()
 
     // MARK: - Dispatch
 
@@ -70,121 +71,6 @@ actor Server {
                 "name": "apple-calendar-mcp",
                 "version": .string(serverVersion),
             ]),
-        ])
-    }
-
-    // MARK: - Tools
-
-    private func toolList() -> JSONValue {
-        .object([
-            "tools": .array([
-                .object([
-                    "name": "check_access",
-                    "description": """
-                        Report whether this server is allowed to read and write the \
-                        Calendar app's events, and what to do about it if not. Use \
-                        this first when a calendar tool fails.
-                        """,
-                    "inputSchema": .object([
-                        "type": "object",
-                        "properties": .object([
-                            "request": .object([
-                                "type": "boolean",
-                                "description": """
-                                    Ask the system for access if no decision has been \
-                                    recorded yet. This may show a permission prompt. \
-                                    Defaults to false, which only reports the status.
-                                    """,
-                            ])
-                        ]),
-                        "additionalProperties": false,
-                    ]),
-                ]),
-                .object([
-                    "name": "list_calendars",
-                    "description": """
-                        List every calendar available on this Mac, including iCloud \
-                        ones, with the identifier needed to read or write events in \
-                        them and whether they accept changes.
-                        """,
-                    "inputSchema": .object([
-                        "type": "object",
-                        "properties": .object([:]),
-                        "additionalProperties": false,
-                    ]),
-                ]),
-            ])
-        ])
-    }
-
-    private func callTool(_ request: RPCRequest) async throws -> JSONValue {
-        guard let name = request.arguments["name"]?.stringValue else {
-            throw RPCError.invalidParams("Missing tool name")
-        }
-        let arguments = request.arguments["arguments"] ?? .object([:])
-
-        switch name {
-        case "check_access": return await checkAccess(arguments)
-        case "list_calendars": return await listCalendars()
-        default: throw RPCError.invalidParams("Unknown tool: \(name)")
-        }
-    }
-
-    private func checkAccess(_ arguments: JSONValue) async -> JSONValue {
-        var state = CalendarAccess.currentState()
-        var requested = false
-
-        if arguments["request"]?.boolValue == true, state == .notDetermined {
-            requested = true
-            let outcome = await calendar.requestAccess()
-            state = outcome.state
-            if let error = outcome.error {
-                log("access request failed: \(error)")
-            }
-        }
-
-        return toolResult(
-            JSONValue.object([
-                "status": .string(state.rawValue),
-                "canReadEvents": .bool(state.canRead),
-                "explanation": .string(state.explanation),
-                "promptRequested": .bool(requested),
-            ]).prettyPrinted(),
-            isError: !state.canRead
-        )
-    }
-
-    private func listCalendars() async -> JSONValue {
-        var state = CalendarAccess.currentState()
-
-        // The first read is what naturally triggers the system prompt.
-        if state == .notDetermined {
-            state = await calendar.requestAccess().state
-            // Apple's documentation: a store that was queried before access was
-            // granted keeps returning nothing until it is reset.
-            await calendar.reset()
-        }
-
-        guard state.canRead else {
-            return toolResult(
-                "Cannot read calendars: \(state.explanation)",
-                isError: true
-            )
-        }
-
-        let calendars = await calendar.calendars()
-        return toolResult(
-            JSONValue.object([
-                "count": .int(calendars.count),
-                "calendars": .array(calendars.map(\.json)),
-            ]).prettyPrinted()
-        )
-    }
-
-    private func toolResult(_ text: String, isError: Bool = false) -> JSONValue {
-        .object([
-            "content": .array([.object(["type": "text", "text": .string(text)])]),
-            "isError": .bool(isError),
         ])
     }
 }

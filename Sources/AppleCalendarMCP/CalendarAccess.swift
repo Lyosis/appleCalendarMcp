@@ -65,7 +65,9 @@ struct CalendarInfo: Sendable, Equatable {
 /// actor: every method converts to a value type before returning. Strict
 /// concurrency enforces that, rather than leaving it to discipline.
 actor CalendarAccess {
-    private let store = EKEventStore()
+    /// Internal rather than private so the operations in CalendarOperations.swift
+    /// can reach it. It still never leaves the actor.
+    let store = EKEventStore()
 
     /// The recorded authorization status. Does not prompt.
     nonisolated static func currentState() -> AccessState {
