@@ -38,6 +38,14 @@ private func accept(_ connection: xpc_connection_t, server: Server) {
         return
     }
 
+    // The team check says the peer is our bridge. It says nothing about who
+    // started it — and the bridge is a public binary anyone can run. So also
+    // require that the pinned client is somewhere above it.
+    guard clientIsAuthorised(connection) else {
+        xpc_connection_cancel(connection)
+        return
+    }
+
     let peer = XPCBox(connection)
 
     xpc_connection_set_event_handler(connection) { event in
@@ -61,4 +69,30 @@ private func accept(_ connection: xpc_connection_t, server: Server) {
     }
 
     xpc_connection_resume(connection)
+}
+
+/// Whether the pinned client is an ancestor of the connecting process.
+///
+/// With nothing pinned this returns true and says so: refusing every client on
+/// a fresh install would be a puzzle, not a protection. The warning is the
+/// honest half of that trade.
+private func clientIsAuthorised(_ connection: xpc_connection_t) -> Bool {
+    guard let requirement = ClientPin.compiled() else {
+        log(
+            """
+            no client is pinned: any process on this Mac signed by the same team \
+            can read and change the calendar through this helper. \
+            Run `apple-calendar-mcp --pin-client-auto` from your MCP client.
+            """)
+        return true
+    }
+
+    let pid = xpc_connection_get_pid(connection)
+    let chain = Ancestry.chain(from: pid)
+    guard chain.contains(where: { Ancestry.satisfies(pid: $0, requirement: requirement) }) else {
+        let names = chain.compactMap { Ancestry.path(of: $0) }.joined(separator: " <- ")
+        log("refused a connection: the pinned client is not among \(names)")
+        return false
+    }
+    return true
 }

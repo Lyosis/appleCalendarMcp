@@ -4,12 +4,12 @@ An MCP server that gives Claude access to the Calendar app on macOS — iCloud
 calendars included — the way the Google Calendar connector does, but reading
 the calendar database already on your Mac rather than a web API.
 
-> **Status: work in progress. Not ready to install.**
-> The architecture, the permission model and all eight tools work end to end,
-> verified against real calendars. What is missing before anyone should install
-> this: the client pinning described under Security, an installer, and
-> notarisation. Until the pinning lands, any process running as you can reach
-> the helper and read or change your calendar.
+> **Status: work in progress. No installer yet.**
+> The architecture, the permission model, all eight tools and the client
+> pinning work end to end, verified against real calendars. What is missing:
+> an installer and notarisation, so installing today means building it
+> yourself. Read [SECURITY.md](SECURITY.md) before you do — it says plainly
+> what the pinning protects and what it does not.
 
 ## Tools
 
@@ -68,10 +68,17 @@ The bridge forwards bytes and needs no privacy permission of its own. The helper
 runs as a launch agent, so launchd is its parent and it holds the calendar
 permission in its own name.
 
-Splitting the process this way creates a local IPC endpoint that holds a
-permission — a confused deputy. Both ends therefore validate each other, and the
-scope of what the helper will do is limited by configuration. See
-[SECURITY.md](SECURITY.md) once written.
+Splitting the process this way creates a local endpoint that holds a permission
+— a confused deputy. The helper therefore checks both that the peer is signed by
+its own team and that the client you pinned is somewhere above it in the process
+tree:
+
+```sh
+apple-calendar-mcp --pin-client-auto      # run this from your MCP client
+```
+
+That narrows the exposure; it does not close it. [SECURITY.md](SECURITY.md) sets
+out what each check covers, and the four things none of them do.
 
 ## Requirements
 
