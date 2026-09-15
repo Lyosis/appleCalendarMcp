@@ -4,24 +4,40 @@
 # agent property list, in one signed bundle.
 #
 #   Scripts/build-app.sh [--release] [--sign <identity>] [--install <dir>]
+#                        [--force] [--allow-adhoc-downgrade]
 #
 # Staging happens outside the source tree on purpose. A checkout inside iCloud
 # Drive (~/Documents and ~/Desktop are synced by default) collects
 # com.apple.FinderInfo and com.apple.fileprovider attributes that codesign
 # refuses outright, and that the file provider puts straight back after
 # `xattr -c`. Assembling in /tmp sidesteps that entirely.
+#
+# Re-signing is destructive, which is why this script would rather do nothing.
+# TCC records a grant against the helper's code signature, so signing again
+# makes it a different client and silently drops the calendar permission — the
+# person has to answer the prompt afterwards with no idea why. Worse under an
+# ad-hoc signature, which TCC pins by content hash: every changed byte is a new
+# client. So an install whose sources and signing identity are unchanged is left
+# strictly alone, and a certificate-signed install is never quietly replaced by
+# an ad-hoc one.
+#
+# (Both of those are owed to omarshahine/apple-pim, which hit them first.)
 
 set -euo pipefail
 
 CONFIGURATION="debug"
 IDENTITY="-"
 INSTALL_DIR="$HOME/Applications"
+FORCE=false
+ALLOW_DOWNGRADE=false
 
 while [ $# -gt 0 ]; do
 	case "$1" in
 		--release) CONFIGURATION="release"; shift ;;
 		--sign) IDENTITY="$2"; shift 2 ;;
 		--install) INSTALL_DIR="$2"; shift 2 ;;
+		--force) FORCE=true; shift ;;
+		--allow-adhoc-downgrade) ALLOW_DOWNGRADE=true; shift ;;
 		*) echo "unknown option: $1" >&2; exit 2 ;;
 	esac
 done
@@ -44,6 +60,48 @@ cp "$BIN/apple-calendar-mcp-bridge" "$APP/Contents/MacOS/"
 cp "$ROOT/Resources/Info.plist" "$APP/Contents/Info.plist"
 cp "$ROOT/Resources/LaunchAgents/"*.plist "$APP/Contents/Library/LaunchAgents/"
 xattr -cr "$APP"
+
+# A fingerprint of what went in, before signing touches any of it. The installed
+# bundle's own bytes cannot be compared against these: signing rewrites the
+# binaries in place, so the copy on disk never matches the copy just built.
+STAMP_REL="Contents/Resources/.build-sources"
+mkdir -p "$APP/Contents/Resources"
+SOURCES_HASH="$(
+	find "$APP" -type f ! -name ".build-sources" -exec shasum -a 256 {} + \
+		| sed "s|$APP/||" | sort -k2 | shasum -a 256 | awk '{print $1}'
+)"
+printf 'sources=%s\nidentity=%s\n' "$SOURCES_HASH" "$IDENTITY" > "$APP/$STAMP_REL"
+
+# Nothing to do when the install already holds these exact sources under this
+# exact identity, and its signature is still intact.
+if [ "$FORCE" = false ] && [ -d "$DESTINATION" ] && [ -f "$DESTINATION/$STAMP_REL" ]; then
+	if cmp -s "$APP/$STAMP_REL" "$DESTINATION/$STAMP_REL" \
+		&& codesign --verify --strict "$DESTINATION" 2>/dev/null; then
+		echo
+		echo "unchanged  $DESTINATION"
+		echo "           same sources, same identity, signature intact — left alone,"
+		echo "           because re-signing would drop the calendar permission."
+		echo "           Pass --force to rebuild anyway."
+		exit 0
+	fi
+fi
+
+# Replacing a certificate-signed install with an ad-hoc one looks like a routine
+# reinstall and costs the person every grant. Refuse by default.
+if [ "$IDENTITY" = "-" ] && [ "$ALLOW_DOWNGRADE" = false ] && [ -d "$DESTINATION" ]; then
+	INSTALLED_TEAM="$(codesign -dvv "$DESTINATION" 2>&1 | sed -n 's/^TeamIdentifier=//p')"
+	if [ -n "$INSTALLED_TEAM" ] && [ "$INSTALLED_TEAM" != "not set" ]; then
+		echo "the install at $DESTINATION is signed by team $INSTALLED_TEAM." >&2
+		echo "signing ad-hoc over it would drop its calendar permission." >&2
+		echo "pass --sign <identity>, or --allow-adhoc-downgrade to accept that." >&2
+		exit 1
+	fi
+fi
+
+if [ "$IDENTITY" = "-" ]; then
+	echo "note: ad-hoc signature — TCC pins it by content hash, so every rebuild"
+	echo "      that changes a byte asks for the calendar permission again."
+fi
 
 echo "==> signing ($IDENTITY)"
 # Inside out. Signing the bundle seals a second executable in Contents/MacOS as

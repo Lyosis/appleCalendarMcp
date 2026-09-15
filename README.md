@@ -157,6 +157,24 @@ usage description is readable at runtime, and which calendars are actually
 visible. It exits non-zero when any of that fails. Include its output in any bug
 report.
 
+## Prior art
+
+[omarshahine/apple-pim](https://github.com/omarshahine/apple-pim) reached the
+same conclusion about the responsible process independently, and got there
+first. It covers more ground — Reminders, Contacts and Mail as well as Calendar
+— ships through npm and a Claude plugin, and launches its helper app per call
+with `open -W`, passing results back through files.
+
+This project is narrower on purpose and spends the difference on the trust
+boundary: one launch agent held open over XPC rather than a launch per call,
+peers required to share the helper's team identifier, the client pinned at
+install time, and every write journalled.
+
+Two things here are owed to it directly: that re-signing an unchanged bundle
+drops the calendar grant, and that an ad-hoc signature is pinned by content
+hash — so `Scripts/build-app.sh` leaves an unchanged install strictly alone and
+refuses to sign ad-hoc over a certificate-signed one.
+
 ## Licence
 
 MIT — see [LICENSE](LICENSE).
