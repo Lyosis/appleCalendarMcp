@@ -80,6 +80,18 @@ apple-calendar-mcp --pin-client-auto      # run this from your MCP client
 That narrows the exposure; it does not close it. [SECURITY.md](SECURITY.md) sets
 out what each check covers, and the four things none of them do.
 
+## The setup window
+
+Opening `AppleCalendarMCP.app` shows the three things that have to be true —
+calendar access, the helper registered, a client pinned — each one a reading
+taken from the system rather than a checkbox recording what was once done, so
+revoking a permission in System Settings shows up here. It also prints the
+configuration line to paste into your client.
+
+Available in English and French, following the system language. The command
+line, the logs and the MCP tool descriptions stay in English: tool descriptions
+are read by models, and diagnostics end up in public issues.
+
 ## Requirements
 
 - macOS 14.4 or later, set by the most demanding API used:

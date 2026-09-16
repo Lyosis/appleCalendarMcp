@@ -23,6 +23,10 @@ func embeddedPlist(_ path: String) -> [LinkerSetting] {
 
 let package = Package(
     name: "apple-calendar-mcp",
+    // The window is localised; the command line, the logs and the MCP tool
+    // descriptions stay in English — the tool descriptions are read by models,
+    // and the diagnostics end up in public issues.
+    defaultLocalization: "en",
     platforms: [
         // Minimum justified by the most demanding API actually used:
         // xpc_connection_set_peer_team_identity_requirement, macOS 14.4+.
@@ -74,6 +78,7 @@ let package = Package(
             name: "AppleCalendarMCPApp",
             dependencies: ["AppleCalendarSetup"],
             path: "Sources/AppleCalendarMCPApp",
+            resources: [.process("Resources")],
             swiftSettings: strictConcurrency
         ),
     ]

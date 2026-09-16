@@ -51,10 +51,29 @@ trap 'rm -rf "$STAGE"' EXIT
 
 echo "==> building ($CONFIGURATION)"
 swift build -c "$CONFIGURATION" --package-path "$ROOT" >/dev/null
-BIN="$ROOT/.build/$CONFIGURATION"
+# Ask where the products actually are rather than assuming .build/<config>:
+# Swift 6 puts them under .build/out/Products/<Config>.
+BIN="$(swift build -c "$CONFIGURATION" --package-path "$ROOT" --show-bin-path)"
 
 echo "==> assembling"
-mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Library/LaunchAgents"
+mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Library/LaunchAgents" "$APP/Contents/Resources"
+
+# The window's localisations. SwiftPM compiles the string catalog into a
+# resource bundle beside the binaries; Bundle.module finds it in the app's
+# Resources folder, and without it every label silently falls back to its
+# English key.
+RESOURCE_BUNDLE="$BIN/apple-calendar-mcp_AppleCalendarMCPApp.bundle"
+test -d "$RESOURCE_BUNDLE" || {
+	echo "the window's resource bundle is missing from $BIN" >&2
+	exit 1
+}
+cp -R "$RESOURCE_BUNDLE" "$APP/Contents/Resources/"
+
+# A real .lproj in the app bundle itself, not only in the nested one. It carries
+# the permission prompt's translated text, and its presence is also what tells
+# macOS the app speaks French at all — without it the process runs in English
+# and never consults the window's catalog.
+cp -R "$ROOT/Resources/"*.lproj "$APP/Contents/Resources/"
 cp "$BIN/AppleCalendarMCP" "$APP/Contents/MacOS/"
 cp "$BIN/apple-calendar-mcp" "$APP/Contents/MacOS/"
 cp "$BIN/apple-calendar-mcp-bridge" "$APP/Contents/MacOS/"
@@ -128,6 +147,12 @@ for EXECUTABLE in "$APP/Contents/MacOS/"*; do
 		exit 1
 	fi
 done
+# A localisation that is declared but not shipped is worse than none: every
+# label falls back to its English key and nothing says why. English is the base
+# language, so it has no table of its own — only the translations do.
+FRENCH="$APP/Contents/Resources/apple-calendar-mcp_AppleCalendarMCPApp.bundle/Contents/Resources/fr.lproj/Localizable.strings"
+test -s "$FRENCH" || { echo "the window is missing its French localisation" >&2; exit 1; }
+
 PLIST="$APP/Contents/Library/LaunchAgents/com.wilfrid.B.apple-calendar-mcp.agent.plist"
 test -f "$PLIST" || { echo "the launch agent plist is missing from the bundle" >&2; exit 1; }
 VERSION_IN_PLIST="$(/usr/libexec/PlistBuddy -c 'Print CFBundleShortVersionString' "$APP/Contents/Info.plist")"

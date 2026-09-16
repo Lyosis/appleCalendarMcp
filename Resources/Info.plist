@@ -4,6 +4,16 @@
 <dict>
 	<key>CFBundleIdentifier</key>
 	<string>com.wilfrid.B.apple-calendar-mcp</string>
+	<!-- Without these, macOS reads the bundle as English-only and forces the
+	     whole process to English — including the window's own string catalog,
+	     which lives in a nested resource bundle and would never be consulted. -->
+	<key>CFBundleDevelopmentRegion</key>
+	<string>en</string>
+	<key>CFBundleLocalizations</key>
+	<array>
+		<string>en</string>
+		<string>fr</string>
+	</array>
 	<key>CFBundleName</key>
 	<string>apple-calendar-mcp</string>
 	<key>CFBundleExecutable</key>
@@ -22,6 +32,6 @@
 	     to present the system permission prompt. The launch agent is a separate
 	     executable started by launchd, so it gets no dock icon regardless. -->
 	<key>NSCalendarsFullAccessUsageDescription</key>
-	<string>apple-calendar-mcp lets Claude read your calendars and create, edit or delete events on your behalf.</string>
+	<string>apple-calendar-mcp lets your assistant read your calendars and create, edit or delete events on your behalf.</string>
 </dict>
 </plist>

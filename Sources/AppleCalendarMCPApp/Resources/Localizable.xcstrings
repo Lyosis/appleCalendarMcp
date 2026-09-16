@@ -1,0 +1,228 @@
+{
+  "sourceLanguage" : "en",
+  "strings" : {
+    "Add this inside \"mcpServers\" in your client's configuration" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "À ajouter dans « mcpServers », dans la configuration de votre client"
+          }
+        }
+      }
+    },
+    "Allowed client" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : { "state" : "translated", "value" : "Client autorisé" }
+        }
+      }
+    },
+    "Blocked by a policy such as Screen Time or a configuration profile." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bloqué par une règle : Temps d’écran ou profil de configuration."
+          }
+        }
+      }
+    },
+    "Choose…" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : { "state" : "translated", "value" : "Choisir…" }
+        }
+      }
+    },
+    "Copied" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : { "state" : "translated", "value" : "Copié" }
+        }
+      }
+    },
+    "Copy" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : { "state" : "translated", "value" : "Copier" }
+        }
+      }
+    },
+    "Done" : {
+      "comment" : "VoiceOver label for a completed setup step",
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : { "state" : "translated", "value" : "Fait" }
+        }
+      }
+    },
+    "Full read and write access to calendar events." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lecture et écriture complètes sur les événements du calendrier."
+          }
+        }
+      }
+    },
+    "Grant…" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : { "state" : "translated", "value" : "Autoriser…" }
+        }
+      }
+    },
+    "Helper" : {
+      "comment" : "The background service that holds the calendar permission",
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : { "state" : "translated", "value" : "Service d’arrière-plan" }
+        }
+      }
+    },
+    "Install" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : { "state" : "translated", "value" : "Installer" }
+        }
+      }
+    },
+    "Calendar access" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : { "state" : "translated", "value" : "Accès au calendrier" }
+        }
+      }
+    },
+    "Not granted yet." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : { "state" : "translated", "value" : "Pas encore accordé." }
+        }
+      }
+    },
+    "Not installed." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : { "state" : "translated", "value" : "Pas installé." }
+        }
+      }
+    },
+    "Not done yet" : {
+      "comment" : "VoiceOver label for a setup step still to do",
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : { "state" : "translated", "value" : "Pas encore fait" }
+        }
+      }
+    },
+    "Nothing is pinned. Any application signed by the same team as this one can reach your calendar through the helper." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aucun client épinglé. Toute application signée par la même équipe que celle-ci peut atteindre votre calendrier par le service d’arrière-plan."
+          }
+        }
+      }
+    },
+    "Only %@ may use the helper." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Seul %@ peut utiliser le service d’arrière-plan."
+          }
+        }
+      }
+    },
+    "Only the pinned application may use the helper." : {
+      "comment" : "Fallback when the pinned requirement carries no readable identifier",
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Seule l’application épinglée peut utiliser le service d’arrière-plan."
+          }
+        }
+      }
+    },
+    "Only event creation is allowed. Reading events needs full access." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Seule la création d’événements est autorisée. Les lire exige un accès complet."
+          }
+        }
+      }
+    },
+    "Refused. Grant it in System Settings › Privacy & Security › Calendars." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Refusé. Autorisez-le dans Réglages › Confidentialité et sécurité › Calendriers."
+          }
+        }
+      }
+    },
+    "Remove" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : { "state" : "translated", "value" : "Retirer" }
+        }
+      }
+    },
+    "Runs in the background and holds the calendar permission." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tourne en arrière-plan et détient l’autorisation calendrier."
+          }
+        }
+      }
+    },
+    "The system reported a status this version does not recognise." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Le système a renvoyé un état inconnu de cette version."
+          }
+        }
+      }
+    },
+    "Then restart the client." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : { "state" : "translated", "value" : "Redémarrez ensuite le client." }
+        }
+      }
+    },
+    "Three things have to be true before an assistant can reach your calendar." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Trois conditions doivent être réunies pour qu’un assistant atteigne votre calendrier."
+          }
+        }
+      }
+    },
+    "Waiting for your approval in System Settings › General › Login Items." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "En attente de votre accord dans Réglages › Général › Ouverture et extensions."
+          }
+        }
+      }
+    }
+  },
+  "version" : "1.0"
+}

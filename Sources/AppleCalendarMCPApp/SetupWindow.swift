@@ -44,80 +44,122 @@ struct SetupWindow: View {
     // The window's title bar already names the app; repeating it here would
     // spend the top of the window saying nothing.
     private var header: some View {
-        Text("Three things have to be true before an assistant can reach your calendar.")
-            .font(.title3)
-            .foregroundStyle(.secondary)
-            .fixedSize(horizontal: false, vertical: true)
+        Text(
+            "Three things have to be true before an assistant can reach your calendar.",
+            bundle: .module
+        )
+        .font(.title3)
+        .foregroundStyle(.secondary)
+        .fixedSize(horizontal: false, vertical: true)
     }
 
     // MARK: - Rows
 
     private var accessRow: some View {
         SetupRow(
-            title: "Calendar access",
-            detail: model.access.explanation,
+            title: Text("Calendar access", bundle: .module),
+            detail: accessDetail,
             isDone: model.access.canRead
         ) {
             if !model.access.canRead {
-                Button("Grant…") {
+                Button {
                     Task { await model.grantAccess() }
+                } label: {
+                    Text("Grant…", bundle: .module)
                 }
                 .disabled(model.busy != nil || model.access == .restricted)
             }
         }
     }
 
+    private var accessDetail: Text {
+        switch model.access {
+        case .fullAccess:
+            Text("Full read and write access to calendar events.", bundle: .module)
+        case .notDetermined:
+            Text("Not granted yet.", bundle: .module)
+        case .denied:
+            Text("Refused. Grant it in System Settings › Privacy & Security › Calendars.", bundle: .module)
+        case .restricted:
+            Text("Blocked by a policy such as Screen Time or a configuration profile.", bundle: .module)
+        case .writeOnly:
+            Text("Only event creation is allowed. Reading events needs full access.", bundle: .module)
+        case .unknown:
+            Text("The system reported a status this version does not recognise.", bundle: .module)
+        }
+    }
+
     private var helperRow: some View {
         SetupRow(
-            title: "Helper",
-            detail: model.helperInstalled
-                ? "Runs in the background and holds the calendar permission."
-                : model.helperState,
-            isDone: model.helperInstalled
+            title: Text("Helper", bundle: .module),
+            detail: helperDetail,
+            isDone: model.helper == .installed
         ) {
-            if model.helperInstalled {
-                Button("Remove") { Task { await model.removeHelper() } }
-                    .disabled(model.busy != nil)
+            if model.helper == .installed {
+                Button { Task { await model.removeHelper() } } label: {
+                    Text("Remove", bundle: .module)
+                }
+                .disabled(model.busy != nil)
             } else {
-                Button("Install") { Task { await model.installHelper() } }
-                    .disabled(model.busy != nil)
+                Button { Task { await model.installHelper() } } label: {
+                    Text("Install", bundle: .module)
+                }
+                .disabled(model.busy != nil)
             }
+        }
+    }
+
+    private var helperDetail: Text {
+        switch model.helper {
+        case .installed:
+            Text("Runs in the background and holds the calendar permission.", bundle: .module)
+        case .notInstalled:
+            Text("Not installed.", bundle: .module)
+        case .needsApproval:
+            Text("Waiting for your approval in System Settings › General › Login Items.", bundle: .module)
         }
     }
 
     private var pinRow: some View {
         SetupRow(
-            title: "Allowed client",
+            title: Text("Allowed client", bundle: .module),
             detail: pinDetail,
-            isDone: model.pinnedRequirement != nil
+            isDone: model.isPinned
         ) {
             HStack(spacing: 8) {
-                if model.pinnedRequirement != nil {
-                    Button("Remove") { Task { await model.unpin() } }
+                if model.isPinned {
+                    Button { Task { await model.unpin() } } label: {
+                        Text("Remove", bundle: .module)
+                    }
                 } else if let suggested = model.suggestedClient {
                     Button(name(of: suggested)) {
                         Task { await model.pin(applicationAt: suggested) }
                     }
                 }
-                Button("Choose…") { choosingClient = true }
+                Button { choosingClient = true } label: {
+                    Text("Choose…", bundle: .module)
+                }
             }
             .disabled(model.busy != nil)
         }
     }
 
-    private var pinDetail: String {
-        guard let requirement = model.pinnedRequirement else {
-            return """
-                Nothing is pinned. Any application on this Mac signed by the same \
-                team as this one can reach your calendar through the helper.
+    private var pinDetail: Text {
+        guard model.isPinned else {
+            return Text(
                 """
+                Nothing is pinned. Any application signed by the same team as this one \
+                can reach your calendar through the helper.
+                """,
+                bundle: .module
+            )
         }
-        // The designated requirement is long and mostly certificate plumbing.
-        // The identifier is the part a person can recognise.
-        if let identifier = requirement.firstMatch(of: /identifier "([^"]+)"/)?.1 {
-            return "Only \(identifier) may use the helper."
+        // A pin with no readable identifier is still a pin; say the true thing
+        // rather than inventing a name for it.
+        guard let identifier = model.pinnedIdentifier else {
+            return Text("Only the pinned application may use the helper.", bundle: .module)
         }
-        return "Only the pinned application may use the helper."
+        return Text("Only \(identifier) may use the helper.", bundle: .module)
     }
 
     private func name(of path: String) -> String {
@@ -128,7 +170,7 @@ struct SetupWindow: View {
 
     private var configuration: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("Add this inside \"mcpServers\" in your client's configuration")
+            Text("Add this inside \"mcpServers\" in your client's configuration", bundle: .module)
                 .font(.headline)
 
             // fixedSize, or the long path is truncated with an ellipsis and the
@@ -143,12 +185,17 @@ struct SetupWindow: View {
                 .background(.quaternary.opacity(0.4), in: .rect(cornerRadius: 8))
 
             HStack {
-                Button(copied ? "Copied" : "Copy", systemImage: copied ? "checkmark" : "doc.on.doc")
-                {
+                Button {
                     copy(model.configurationSnippet)
+                } label: {
+                    Label {
+                        Text(copied ? "Copied" : "Copy", bundle: .module)
+                    } icon: {
+                        Image(systemName: copied ? "checkmark" : "doc.on.doc")
+                    }
                 }
                 Spacer()
-                Text("Then restart the client.")
+                Text("Then restart the client.", bundle: .module)
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -168,8 +215,8 @@ struct SetupWindow: View {
 
 /// One line of the checklist: what it is, where it stands, what to do about it.
 private struct SetupRow<Actions: View>: View {
-    let title: String
-    let detail: String
+    let title: Text
+    let detail: Text
     let isDone: Bool
     @ViewBuilder let actions: Actions
 
@@ -178,11 +225,15 @@ private struct SetupRow<Actions: View>: View {
             Image(systemName: isDone ? "checkmark.circle.fill" : "circle.dashed")
                 .foregroundStyle(isDone ? .green : .secondary)
                 .font(.title3)
-                .accessibilityLabel(isDone ? "Done" : "Not done yet")
+                .accessibilityLabel(
+                    isDone
+                        ? Text("Done", bundle: .module)
+                        : Text("Not done yet", bundle: .module)
+                )
 
             VStack(alignment: .leading, spacing: 2) {
-                Text(title).font(.headline)
-                Text(detail)
+                title.font(.headline)
+                detail
                     .font(.callout)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)

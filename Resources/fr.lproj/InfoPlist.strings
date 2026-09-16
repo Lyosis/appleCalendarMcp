@@ -1,0 +1,5 @@
+/* The text macOS shows in the Calendar permission prompt. */
+"NSCalendarsFullAccessUsageDescription" = "apple-calendar-mcp permet à votre assistant de lire vos calendriers et de créer, modifier ou supprimer des événements en votre nom.";
+
+/* The application's display name. */
+"CFBundleName" = "Apple Calendar for MCP";

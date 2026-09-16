@@ -1,6 +1,14 @@
 import AppleCalendarSetup
 import Foundation
 import Observation
+import ServiceManagement
+
+/// The helper's registration, reduced to what the window has wording for.
+enum HelperState {
+    case installed
+    case notInstalled
+    case needsApproval
+}
 
 /// What the installer window shows, read from the system rather than remembered.
 ///
@@ -12,10 +20,12 @@ import Observation
 @Observable
 final class SetupModel {
     private(set) var access: AccessState = .notDetermined
-    private(set) var helperState: String = ""
-    private(set) var helperInstalled = false
-    private(set) var pinnedRequirement: String?
-    private(set) var pinReadFailed = false
+    private(set) var helper: HelperState = .notInstalled
+
+    /// The pinned client's bundle identifier — the part of a designated
+    /// requirement a person can recognise, the rest being certificate plumbing.
+    private(set) var pinnedIdentifier: String?
+    private(set) var isPinned = false
 
     /// The action in flight, so the window can disable the rest.
     private(set) var busy: String?
@@ -45,14 +55,17 @@ final class SetupModel {
 
     func refresh() {
         access = CalendarPermission.current()
-        helperInstalled = ServiceControl.status == .enabled
-        helperState = ServiceControl.describe(ServiceControl.status)
 
-        // A keychain read can fail for reasons that are not "nothing is pinned"
-        // — a locked keychain, or an item another binary owns. Saying "none"
-        // in that case would be a lie the person acts on.
-        pinnedRequirement = ClientPin.requirementText()
-        pinReadFailed = false
+        helper =
+            switch ServiceControl.status {
+            case .enabled: .installed
+            case .requiresApproval: .needsApproval
+            default: .notInstalled
+            }
+
+        let requirement = ClientPin.requirementText()
+        isPinned = requirement != nil
+        pinnedIdentifier = requirement?.firstMatch(of: /identifier "([^"]+)"/).map { String($0.1) }
     }
 
     // MARK: - Actions
