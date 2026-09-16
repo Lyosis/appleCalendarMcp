@@ -55,6 +55,7 @@ BIN="$ROOT/.build/$CONFIGURATION"
 
 echo "==> assembling"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Library/LaunchAgents"
+cp "$BIN/AppleCalendarMCP" "$APP/Contents/MacOS/"
 cp "$BIN/apple-calendar-mcp" "$APP/Contents/MacOS/"
 cp "$BIN/apple-calendar-mcp-bridge" "$APP/Contents/MacOS/"
 cp "$ROOT/Resources/Info.plist" "$APP/Contents/Info.plist"
@@ -110,6 +111,7 @@ echo "==> signing ($IDENTITY)"
 # identifier, would refuse it.
 codesign --force --options runtime --sign "$IDENTITY" "$APP/Contents/MacOS/apple-calendar-mcp-bridge"
 codesign --force --options runtime --sign "$IDENTITY" "$APP/Contents/MacOS/apple-calendar-mcp"
+codesign --force --options runtime --sign "$IDENTITY" "$APP/Contents/MacOS/AppleCalendarMCP"
 codesign --force --options runtime --sign "$IDENTITY" "$APP"
 
 # Assert on the artefact, never on the intention.

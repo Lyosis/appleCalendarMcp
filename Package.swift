@@ -37,6 +37,8 @@ let package = Package(
         .executable(name: "apple-calendar-mcp", targets: ["AppleCalendarMCP"]),
         // Spawned by the MCP client, forwards messages to the helper.
         .executable(name: "apple-calendar-mcp-bridge", targets: ["AppleCalendarBridge"]),
+        // The bundle's main executable: the window where setup happens.
+        .executable(name: "AppleCalendarMCP", targets: ["AppleCalendarMCPApp"]),
     ],
     targets: [
         .target(
@@ -65,6 +67,14 @@ let package = Package(
             path: "Sources/AppleCalendarBridge",
             swiftSettings: strictConcurrency,
             linkerSettings: embeddedPlist("Resources/BridgeInfo.plist")
+        ),
+        // No embedded plist: this one is the bundle's main executable, so the
+        // bundle's own Info.plist is what the system reads.
+        .executableTarget(
+            name: "AppleCalendarMCPApp",
+            dependencies: ["AppleCalendarSetup"],
+            path: "Sources/AppleCalendarMCPApp",
+            swiftSettings: strictConcurrency
         ),
     ]
 )
