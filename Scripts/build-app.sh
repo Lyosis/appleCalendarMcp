@@ -123,15 +123,23 @@ if [ "$IDENTITY" = "-" ]; then
 	echo "      that changes a byte asks for the calendar permission again."
 fi
 
+# Notarisation requires a secure timestamp, and a signature without one is
+# rejected at submission. codesign is documented to add a timestamp by default
+# under a Developer ID identity, but a default is not a guarantee on a point
+# that fails the whole submission, so ask for it explicitly. An ad-hoc
+# signature cannot carry one at all.
+TIMESTAMP="--timestamp"
+[ "$IDENTITY" = "-" ] && TIMESTAMP="--timestamp=none"
+
 echo "==> signing ($IDENTITY)"
 # Inside out. Signing the bundle seals a second executable in Contents/MacOS as
 # a nested resource without re-signing it, so the bridge would keep SwiftPM's
 # ad-hoc signature — and the helper, which requires its peers to share its team
 # identifier, would refuse it.
-codesign --force --options runtime --sign "$IDENTITY" "$APP/Contents/MacOS/apple-calendar-mcp-bridge"
-codesign --force --options runtime --sign "$IDENTITY" "$APP/Contents/MacOS/apple-calendar-mcp"
-codesign --force --options runtime --sign "$IDENTITY" "$APP/Contents/MacOS/AppleCalendarMCP"
-codesign --force --options runtime --sign "$IDENTITY" "$APP"
+codesign --force --options runtime "$TIMESTAMP" --sign "$IDENTITY" "$APP/Contents/MacOS/apple-calendar-mcp-bridge"
+codesign --force --options runtime "$TIMESTAMP" --sign "$IDENTITY" "$APP/Contents/MacOS/apple-calendar-mcp"
+codesign --force --options runtime "$TIMESTAMP" --sign "$IDENTITY" "$APP/Contents/MacOS/AppleCalendarMCP"
+codesign --force --options runtime "$TIMESTAMP" --sign "$IDENTITY" "$APP"
 
 # Assert on the artefact, never on the intention.
 codesign --verify --strict "$APP"
@@ -147,6 +155,24 @@ for EXECUTABLE in "$APP/Contents/MacOS/"*; do
 		exit 1
 	fi
 done
+# A Developer ID signature with no timestamp passes --verify and fails
+# notarisation, which is the worst order to find out. Assert it here.
+#
+# Capture the output before searching it. `codesign -dvv | grep -q` looks
+# right and fails most of the time under pipefail: grep exits on the first
+# match, codesign is still writing to the closed pipe, takes SIGPIPE, and the
+# pipeline reports failure for a signature that is perfectly fine.
+if [ "$IDENTITY" != "-" ]; then
+	for EXECUTABLE in "$APP/Contents/MacOS/"* "$APP"; do
+		SIGNATURE="$(codesign -dvv "$EXECUTABLE" 2>&1)"
+		if ! grep -q "^Timestamp=" <<<"$SIGNATURE"; then
+			echo "$(basename "$EXECUTABLE"): signed without a secure timestamp" >&2
+			echo "notarisation would reject this" >&2
+			exit 1
+		fi
+	done
+fi
+
 # A localisation that is declared but not shipped is worse than none: every
 # label falls back to its English key and nothing says why. English is the base
 # language, so it has no table of its own — only the translations do.
@@ -178,8 +204,11 @@ ditto "$APP" "$DESTINATION"
 echo
 echo "built    $DESTINATION"
 echo "version  $VERSION_IN_CODE"
-echo "signed   $(codesign -dvv "$DESTINATION" 2>&1 | grep -E '^Authority=' | head -1 | cut -d= -f2- || true)"
-echo "         $(codesign -dvv "$DESTINATION" 2>&1 | grep -E '^Signature=' | head -1 || echo 'Signature=?')"
+# An ad-hoc signature reports Signature=adhoc; a certificate reports a
+# Timestamp= line instead. Show whichever is there.
+INSTALLED="$(codesign -dvv "$DESTINATION" 2>&1)"
+echo "signed   $(sed -n '/^Authority=/{s/^Authority=//p;q;}' <<<"$INSTALLED")"
+echo "         $(sed -En '/^(Signature|Timestamp)=/{p;q;}' <<<"$INSTALLED")"
 echo
 echo "next:"
 echo "  '$DESTINATION/Contents/MacOS/apple-calendar-mcp' --register-agent"
