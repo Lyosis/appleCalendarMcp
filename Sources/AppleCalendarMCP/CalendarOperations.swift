@@ -64,10 +64,35 @@ extension CalendarAccess {
             .filter { $0.availability != "free" && $0.end > $0.start }
             .map { DateInterval(start: $0.start, end: $0.end) }
             .sorted { $0.start < $1.start }
-        let merged = Self.merge(busy)
 
+        return Self.openings(
+            from: start,
+            to: end,
+            busy: Self.merge(busy),
+            minimum: duration,
+            dayStartHour: dayStartHour,
+            dayEndHour: dayEndHour,
+            calendar: .current
+        )
+    }
+
+    /// The working-hours openings of each day, given busy intervals that are
+    /// sorted and merged.
+    ///
+    /// One pass over `busy` for the whole range: each day starts where the
+    /// previous one stopped, instead of rescanning every interval from the
+    /// first — which made a long range cost days × events.
+    static func openings(
+        from start: Date,
+        to end: Date,
+        busy merged: [DateInterval],
+        minimum duration: TimeInterval,
+        dayStartHour: Int,
+        dayEndHour: Int,
+        calendar: Calendar
+    ) -> [DateInterval] {
         var slots: [DateInterval] = []
-        let calendar = Calendar.current
+        var first = merged.startIndex
         var day = calendar.startOfDay(for: start)
 
         while day < end {
@@ -76,9 +101,12 @@ extension CalendarAccess {
                 let lower = max(windowStart, start)
                 let upper = min(windowEnd, end)
                 if lower < upper {
-                    slots += Self.gaps(
+                    // Intervals over before this window can only be over
+                    // before every later one too.
+                    while first < merged.endIndex, merged[first].end <= lower { first += 1 }
+                    slots += gaps(
                         in: DateInterval(start: lower, end: upper),
-                        busy: merged,
+                        busy: merged[first...],
                         minimum: duration
                     )
                 }
@@ -119,11 +147,9 @@ extension CalendarAccess {
     }
 
     func update(
-        id: String, occurrenceStart: Date?, span: EKSpan, draft: EventDraft
+        id: String, occurrenceStart: Date?, scope: RecurrenceScope, draft: EventDraft
     ) throws -> EventInfo {
-        guard let event = findEvent(id: id, occurrenceStart: occurrenceStart) else {
-            throw CalendarError.unknownEvent(id)
-        }
+        let (event, span) = try target(id: id, occurrenceStart: occurrenceStart, scope: scope)
         guard event.calendar?.allowsContentModifications == true else {
             throw CalendarError.readOnlyCalendar(event.calendar?.title ?? "unknown")
         }
@@ -148,11 +174,10 @@ extension CalendarAccess {
         return EventInfo(event)
     }
 
-    /// Removes one event. Returns what was removed, so the caller can record it.
-    func delete(id: String, occurrenceStart: Date?, span: EKSpan) throws -> EventInfo {
-        guard let event = findEvent(id: id, occurrenceStart: occurrenceStart) else {
-            throw CalendarError.unknownEvent(id)
-        }
+    /// Removes one event, or one series. Returns what was removed, so the
+    /// caller can record it.
+    func delete(id: String, occurrenceStart: Date?, scope: RecurrenceScope) throws -> EventInfo {
+        let (event, span) = try target(id: id, occurrenceStart: occurrenceStart, scope: scope)
         guard event.calendar?.allowsContentModifications == true else {
             throw CalendarError.readOnlyCalendar(event.calendar?.title ?? "unknown")
         }
@@ -166,6 +191,34 @@ extension CalendarAccess {
     }
 
     // MARK: - Lookup
+
+    /// The event a change applies to, and the EventKit span that matches what
+    /// the caller asked for — never a guess.
+    ///
+    /// `event(withIdentifier:)` returns the first occurrence of a series, so a
+    /// recurring event looked up without `occurrenceStart` is refused unless
+    /// the caller asked for the whole series; and the whole series is that
+    /// first occurrence with `.futureEvents`.
+    private func target(
+        id: String, occurrenceStart: Date?, scope: RecurrenceScope
+    ) throws -> (EKEvent, EKSpan) {
+        if scope == .series {
+            guard occurrenceStart == nil else { throw CalendarError.seriesWithOccurrence }
+            guard let event = store.event(withIdentifier: id) else {
+                throw CalendarError.unknownEvent(id)
+            }
+            guard event.hasRecurrenceRules else { throw CalendarError.notRecurring(id) }
+            return (event, .futureEvents)
+        }
+
+        guard let event = findEvent(id: id, occurrenceStart: occurrenceStart) else {
+            throw CalendarError.unknownEvent(id)
+        }
+        if event.hasRecurrenceRules, occurrenceStart == nil {
+            throw CalendarError.occurrenceRequired(id)
+        }
+        return (event, scope == .futureEvents ? .futureEvents : .thisEvent)
+    }
 
     /// Finds an event, and for a recurring series the right occurrence of it.
     ///
@@ -221,6 +274,24 @@ extension CalendarAccess {
     /// `predicateForEvents` matches at most four years and shortens anything
     /// longer *silently*, so a caller asking for a decade would get three years
     /// of results and no indication that the rest was dropped.
+    /// What a single call may cover. Ten years keeps "a decade works" true;
+    /// a year is plenty for openings, whose cost is per day.
+    static let eventRangeLimit: (seconds: TimeInterval, name: String) = (3653 * 24 * 3600, "ten years")
+    static let openingsRangeLimit: (seconds: TimeInterval, name: String) = (366 * 24 * 3600, "one year")
+
+    /// Refuses an empty, inverted or oversized range before anything runs.
+    ///
+    /// An empty range used to answer "0 events" — which a model reads as "you
+    /// are free" — and an unbounded one held the store for minutes.
+    static func checkRange(
+        from start: Date, to end: Date, limit: (seconds: TimeInterval, name: String)
+    ) throws {
+        guard end > start else { throw CalendarError.emptyRange }
+        guard end.timeIntervalSince(start) <= limit.seconds else {
+            throw CalendarError.rangeTooLong(maximum: limit.name)
+        }
+    }
+
     static func searchWindows(from start: Date, to end: Date) -> [(start: Date, end: Date)] {
         guard end > start else { return [] }
         let maximum: TimeInterval = 3 * 365 * 24 * 3600  // comfortably inside the cap
@@ -247,13 +318,17 @@ extension CalendarAccess {
         return merged
     }
 
+    /// Openings of at least `minimum` inside `window`. `busy` must be sorted
+    /// and merged; the scan stops at the first interval past the window.
     static func gaps(
-        in window: DateInterval, busy: [DateInterval], minimum: TimeInterval
+        in window: DateInterval, busy: ArraySlice<DateInterval>, minimum: TimeInterval
     ) -> [DateInterval] {
         var result: [DateInterval] = []
         var cursor = window.start
 
-        for interval in busy where interval.end > window.start && interval.start < window.end {
+        for interval in busy {
+            if interval.start >= window.end { break }
+            guard interval.end > window.start else { continue }
             if interval.start > cursor {
                 let gap = DateInterval(start: cursor, end: min(interval.start, window.end))
                 if gap.duration >= minimum { result.append(gap) }

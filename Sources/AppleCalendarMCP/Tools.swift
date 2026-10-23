@@ -42,12 +42,18 @@ extension Server {
                 tool(
                     "list_events",
                     """
-                    List events overlapping a time range, oldest first. Ranges longer than \
-                    three years are split internally, so a decade works.
+                    List events overlapping a time range, oldest first. The range may \
+                    cover up to ten years; end must be later than start.
                     """,
                     properties: [
-                        "start": schema("string", "Start of the range, ISO 8601, e.g. 2026-09-04T00:00:00+02:00."),
-                        "end": schema("string", "End of the range, ISO 8601."),
+                        "start": schema(
+                            "string",
+                            """
+                            Start of the range, ISO 8601, e.g. 2026-09-04T00:00:00+02:00. \
+                            Without an offset the Mac's time zone is used; a bare date \
+                            means midnight.
+                            """),
+                        "end": schema("string", "End of the range, ISO 8601. For one whole day, the next day's date."),
                         "calendarIds": arraySchema("Limit to these calendars. Defaults to all of them."),
                         "includeDetails": schema(
                             "boolean",
@@ -62,7 +68,7 @@ extension Server {
                     "search_events",
                     """
                     Find events whose title, location or notes contain some text, within \
-                    a time range. Matching ignores case and accents.
+                    a time range of up to ten years. Matching ignores case and accents.
                     """,
                     properties: [
                         "query": schema("string", "Text to look for."),
@@ -76,8 +82,9 @@ extension Server {
                 tool(
                     "find_free_slots",
                     """
-                    Find openings of at least a given length, within working hours. Events \
-                    marked free — as all-day markers usually are — do not block a slot.
+                    Find openings of at least a given length, within working hours, over \
+                    a range of up to one year. Events marked free — as all-day markers \
+                    usually are — do not block a slot.
                     """,
                     properties: [
                         "start": schema("string", "Start of the range to search, ISO 8601."),
@@ -107,21 +114,24 @@ extension Server {
                     "update_event",
                     """
                     Change an existing event. Only the fields you pass are altered. For a \
-                    recurring event, pass occurrenceStart to address one occurrence.
+                    recurring event, say which part to change: occurrenceStart with span \
+                    thisEvent or futureEvents, or span series for every occurrence. A \
+                    recurring event addressed without either is refused, and nothing changes.
                     """,
                     properties: [
                         "id": schema("string", "Identifier from list_events or search_events."),
                         "occurrenceStart": schema(
                             "string",
                             """
-                            Start of the occurrence to change, ISO 8601. Required for a \
-                            recurring event; without it the series is matched instead.
+                            Start of the occurrence to change, ISO 8601, as list_events \
+                            returns it. Required for a recurring event unless span is series.
                             """),
-                        "span": schema(
-                            "string",
+                        "span": spanSchema(
                             """
-                            "thisEvent" changes only this occurrence, "futureEvents" changes \
-                            it and every later one. Defaults to thisEvent.
+                            "thisEvent" changes only that occurrence, "futureEvents" changes \
+                            it and every later one, "series" changes every occurrence and \
+                            takes no occurrenceStart. Defaults to thisEvent; any other value \
+                            is refused.
                             """),
                         "title": schema("string", "New title."),
                         "start": schema("string", "New start, ISO 8601."),
@@ -136,13 +146,24 @@ extension Server {
                 tool(
                     "delete_event",
                     """
-                    Delete one event. Requires confirm: true, deletes a single event per \
-                    call, and every deletion is written to the change journal.
+                    Delete one event — or, for a recurring event, one occurrence, it and \
+                    the later ones, or the whole series, as span says. Requires confirm: \
+                    true, and every deletion is written to the change journal.
                     """,
                     properties: [
                         "id": schema("string", "Identifier from list_events or search_events."),
-                        "occurrenceStart": schema("string", "Start of the occurrence to delete, ISO 8601."),
-                        "span": schema("string", "\"thisEvent\" or \"futureEvents\". Defaults to thisEvent."),
+                        "occurrenceStart": schema(
+                            "string",
+                            """
+                            Start of the occurrence to delete, ISO 8601, as list_events \
+                            returns it. Required for a recurring event unless span is series.
+                            """),
+                        "span": spanSchema(
+                            """
+                            "thisEvent", "futureEvents" or "series" — the last deletes every \
+                            occurrence and takes no occurrenceStart. Defaults to thisEvent; \
+                            any other value is refused.
+                            """),
                         "confirm": schema("boolean", "Must be true. Nothing is deleted without it."),
                     ],
                     required: ["id", "confirm"]),
@@ -228,34 +249,31 @@ extension Server {
 
     private func listEvents(_ arguments: JSONValue) async throws -> JSONValue {
         try await ensureAccess()
-        let start = try requiredDate(arguments, "start")
-        let end = try requiredDate(arguments, "end")
+        let range = try requiredRange(arguments, limit: CalendarAccess.eventRangeLimit)
         let events = try await calendar.events(
-            from: start, to: end, calendarIDs: calendarIDs(arguments))
+            from: range.start, to: range.end, calendarIDs: calendarIDs(arguments))
         return eventsResult(events, arguments: arguments)
     }
 
     private func searchEvents(_ arguments: JSONValue) async throws -> JSONValue {
         try await ensureAccess()
         let query = try requiredString(arguments, "query")
-        let start = try requiredDate(arguments, "start")
-        let end = try requiredDate(arguments, "end")
+        let range = try requiredRange(arguments, limit: CalendarAccess.eventRangeLimit)
         let events = try await calendar.search(
-            query: query, from: start, to: end, calendarIDs: calendarIDs(arguments))
+            query: query, from: range.start, to: range.end, calendarIDs: calendarIDs(arguments))
         return eventsResult(events, arguments: arguments)
     }
 
     private func findFreeSlots(_ arguments: JSONValue) async throws -> JSONValue {
         try await ensureAccess()
-        let start = try requiredDate(arguments, "start")
-        let end = try requiredDate(arguments, "end")
+        let range = try requiredRange(arguments, limit: CalendarAccess.openingsRangeLimit)
         guard let minutes = arguments["durationMinutes"]?.intValue, minutes > 0 else {
             throw ToolFailure("durationMinutes must be a positive number of minutes.")
         }
 
         let slots = try await calendar.freeSlots(
-            from: start,
-            to: end,
+            from: range.start,
+            to: range.end,
             duration: Double(minutes) * 60,
             calendarIDs: calendarIDs(arguments),
             dayStartHour: arguments["dayStartHour"]?.intValue ?? 9,
@@ -292,7 +310,7 @@ extension Server {
         draft.alarmMinutesBefore = arguments["alarmMinutesBefore"]?.intValue
 
         let event = try await calendar.create(draft)
-        await journal.record(action: "create", event: event, span: "thisEvent")
+        await journal.record(action: "create", event: event, scope: .thisEvent, occurrenceStart: nil)
 
         return toolResult(
             JSONValue.object([
@@ -304,6 +322,8 @@ extension Server {
     private func updateEvent(_ arguments: JSONValue) async throws -> JSONValue {
         try await ensureAccess()
         let id = try requiredString(arguments, "id")
+        let occurrenceStart = try optionalDate(arguments, "occurrenceStart")
+        let scope = try RecurrenceScope(argument: arguments["span"]?.stringValue)
 
         var draft = EventDraft()
         draft.title = arguments["title"]?.stringValue
@@ -316,12 +336,9 @@ extension Server {
         draft.calendarID = arguments["calendarId"]?.stringValue
 
         let event = try await calendar.update(
-            id: id,
-            occurrenceStart: try optionalDate(arguments, "occurrenceStart"),
-            span: span(arguments),
-            draft: draft
-        )
-        await journal.record(action: "update", event: event, span: spanName(arguments))
+            id: id, occurrenceStart: occurrenceStart, scope: scope, draft: draft)
+        await journal.record(
+            action: "update", event: event, scope: scope, occurrenceStart: occurrenceStart)
 
         return toolResult(
             JSONValue.object([
@@ -336,13 +353,13 @@ extension Server {
             throw CalendarError.notConfirmed
         }
         let id = try requiredString(arguments, "id")
+        let occurrenceStart = try optionalDate(arguments, "occurrenceStart")
+        let scope = try RecurrenceScope(argument: arguments["span"]?.stringValue)
 
         let removed = try await calendar.delete(
-            id: id,
-            occurrenceStart: try optionalDate(arguments, "occurrenceStart"),
-            span: span(arguments)
-        )
-        await journal.record(action: "delete", event: removed, span: spanName(arguments))
+            id: id, occurrenceStart: occurrenceStart, scope: scope)
+        await journal.record(
+            action: "delete", event: removed, scope: scope, occurrenceStart: occurrenceStart)
 
         return toolResult(
             JSONValue.object([
@@ -380,6 +397,15 @@ extension Server {
 
 private func schema(_ type: String, _ description: String) -> JSONValue {
     .object(["type": .string(type), "description": .string(description)])
+}
+
+/// `span`, with its three accepted values listed for the model to read.
+private func spanSchema(_ description: String) -> JSONValue {
+    .object([
+        "type": "string",
+        "enum": .array(RecurrenceScope.allCases.map { .string($0.rawValue) }),
+        "description": .string(description),
+    ])
 }
 
 private func arraySchema(_ description: String) -> JSONValue {
@@ -436,14 +462,16 @@ private func optionalDate(_ arguments: JSONValue, _ key: String) throws -> Date?
     return date
 }
 
+/// `start` and `end`, refused when empty, inverted or longer than `limit`.
+private func requiredRange(
+    _ arguments: JSONValue, limit: (seconds: TimeInterval, name: String)
+) throws -> (start: Date, end: Date) {
+    let start = try requiredDate(arguments, "start")
+    let end = try requiredDate(arguments, "end")
+    try CalendarAccess.checkRange(from: start, to: end, limit: limit)
+    return (start, end)
+}
+
 private func calendarIDs(_ arguments: JSONValue) -> [String]? {
     arguments["calendarIds"]?.arrayValue?.compactMap(\.stringValue)
-}
-
-private func spanName(_ arguments: JSONValue) -> String {
-    arguments["span"]?.stringValue == "futureEvents" ? "futureEvents" : "thisEvent"
-}
-
-private func span(_ arguments: JSONValue) -> EKSpan {
-    spanName(arguments) == "futureEvents" ? .futureEvents : .thisEvent
 }
