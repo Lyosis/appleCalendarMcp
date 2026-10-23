@@ -174,7 +174,8 @@ registering it the first time.
 ### Changing the signing certificate
 
 Moving to another certificate — from Apple Development to Developer ID, or to a
-renewed Developer ID — has three consequences, all observed.
+renewed Developer ID — has two consequences, both observed, and one more was
+seen once.
 
 **The first launch can be refused.** After rebuilding with the new certificate
 and registering again, launchd killed the helper on its first launch:
@@ -209,17 +210,17 @@ signature is the likely explanation, not a proven one.
 against the signature, so a new certificate is a new client. Open the app and
 grant access once more.
 
-**The client pin can no longer be changed or removed.** The pin is a keychain
-item that only the build which created it may modify. A later build still
-reads it, so the client you pinned stays pinned, but `--unpin-client` fails
-with `-25244` (*invalid attempt to change the owner of this item*) — and so do
-the window's Remove button and pinning a different client, which go through
-the same deletion. This is a known limitation, to be fixed. Until then, the
-item can presumably be removed directly, though this has not been tried yet
-and macOS may ask for your login password:
+**Seen once: a pin that could not be removed.** A rebuilt helper failed to
+remove a pin created by an earlier build, with `-25244` (*invalid attempt to
+change the owner of this item*); the window's Remove button and re-pinning go
+through the same deletion. It did not happen again on the next certificate
+change — the new build removed an older build's pin without trouble — and the
+cause is not known. If you hit it, removing the keychain item directly works
+(verified, without a password prompt), after which you pin again:
 
 ```sh
 security delete-generic-password -s com.wilfrid.B.apple-calendar-mcp -a pinned-client-requirement
+AppleCalendarMCP.app/Contents/MacOS/apple-calendar-mcp --pin-client /Applications/Claude.app
 ```
 
 ## Checking your machine
