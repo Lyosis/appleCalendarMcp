@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- Under the hardened runtime, which notarisation requires, a process
+	     without this entitlement can ask for calendar access and the system
+	     never shows the prompt. Signed into the window and the helper only:
+	     the bridge forwards bytes and never touches EventKit. -->
+	<key>com.apple.security.personal-information.calendars</key>
+	<true/>
+</dict>
+</plist>

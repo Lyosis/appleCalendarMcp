@@ -43,6 +43,7 @@ while [ $# -gt 0 ]; do
 done
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+ENTITLEMENTS="$ROOT/Resources/AppleCalendarMCP.entitlements"
 STAGE="$(mktemp -d /tmp/apple-calendar-mcp-build.XXXXXX)"
 APP="$STAGE/AppleCalendarMCP.app"
 DESTINATION="$INSTALL_DIR/AppleCalendarMCP.app"
@@ -90,7 +91,11 @@ SOURCES_HASH="$(
 	find "$APP" -type f ! -name ".build-sources" -exec shasum -a 256 {} + \
 		| sed "s|$APP/||" | sort -k2 | shasum -a 256 | awk '{print $1}'
 )"
-printf 'sources=%s\nidentity=%s\n' "$SOURCES_HASH" "$IDENTITY" > "$APP/$STAMP_REL"
+# The entitlements are applied at signing and never copied into the bundle, so
+# hash them separately: otherwise a change to them alone would leave an
+# installed copy "unchanged" and the fix would never ship.
+ENTITLEMENTS_HASH="$(shasum -a 256 "$ENTITLEMENTS" | awk '{print $1}')"
+printf 'sources=%s\nentitlements=%s\nidentity=%s\n' "$SOURCES_HASH" "$ENTITLEMENTS_HASH" "$IDENTITY" > "$APP/$STAMP_REL"
 
 # Nothing to do when the install already holds these exact sources under this
 # exact identity, and its signature is still intact.
@@ -137,9 +142,11 @@ echo "==> signing ($IDENTITY)"
 # ad-hoc signature — and the helper, which requires its peers to share its team
 # identifier, would refuse it.
 codesign --force --options runtime "$TIMESTAMP" --sign "$IDENTITY" "$APP/Contents/MacOS/apple-calendar-mcp-bridge"
-codesign --force --options runtime "$TIMESTAMP" --sign "$IDENTITY" "$APP/Contents/MacOS/apple-calendar-mcp"
-codesign --force --options runtime "$TIMESTAMP" --sign "$IDENTITY" "$APP/Contents/MacOS/AppleCalendarMCP"
-codesign --force --options runtime "$TIMESTAMP" --sign "$IDENTITY" "$APP"
+codesign --force --options runtime "$TIMESTAMP" --entitlements "$ENTITLEMENTS" --sign "$IDENTITY" "$APP/Contents/MacOS/apple-calendar-mcp"
+codesign --force --options runtime "$TIMESTAMP" --entitlements "$ENTITLEMENTS" --sign "$IDENTITY" "$APP/Contents/MacOS/AppleCalendarMCP"
+# Signing the bundle re-signs its main executable, the window. Without the
+# entitlements here too, the line above is silently undone.
+codesign --force --options runtime "$TIMESTAMP" --entitlements "$ENTITLEMENTS" --sign "$IDENTITY" "$APP"
 
 # Assert on the artefact, never on the intention.
 codesign --verify --strict "$APP"
@@ -172,6 +179,18 @@ if [ "$IDENTITY" != "-" ]; then
 		fi
 	done
 fi
+
+# The calendar entitlement, on exactly the executables that use EventKit. Its
+# absence fails without a sound: the request goes out, no prompt ever appears.
+for EXECUTABLE in AppleCalendarMCP apple-calendar-mcp apple-calendar-mcp-bridge; do
+	GRANTED="$(codesign -d --entitlements - --xml "$APP/Contents/MacOS/$EXECUTABLE" 2>/dev/null)"
+	if grep -q "personal-information.calendars" <<<"$GRANTED"; then HAS=yes; else HAS=no; fi
+	if [ "$EXECUTABLE" = "apple-calendar-mcp-bridge" ]; then WANT=no; else WANT=yes; fi
+	if [ "$HAS" != "$WANT" ]; then
+		echo "$EXECUTABLE: calendar entitlement present=$HAS, expected=$WANT" >&2
+		exit 1
+	fi
+done
 
 # A localisation that is declared but not shipped is worse than none: every
 # label falls back to its English key and nothing says why. English is the base
