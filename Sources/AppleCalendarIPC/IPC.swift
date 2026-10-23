@@ -7,6 +7,13 @@ import os
 /// property list; the two are a single contract expressed in two places.
 public let machServiceName = "com.wilfrid.B.apple-calendar-mcp.agent"
 
+/// The signing identifier the helper requires of every peer: the bridge's.
+///
+/// This must stay identical to `CFBundleIdentifier` in `Resources/BridgeInfo.plist`,
+/// which is where codesign takes it from. Scripts/build-app.sh refuses a bundle
+/// whose bridge was signed under any other identifier, and `--selftest` fails.
+public let bridgeSigningIdentifier = "com.wilfrid.B.apple-calendar-mcp.bridge"
+
 /// Keys of the XPC dictionary carrying one MCP message each way.
 public enum IPCKey {
     /// One JSON-RPC message, exactly as the MCP client wrote it.

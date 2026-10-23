@@ -162,6 +162,19 @@ for EXECUTABLE in "$APP/Contents/MacOS/"*; do
 		exit 1
 	fi
 done
+
+# The helper also requires the bridge's exact signing identifier. codesign takes
+# it from the bridge's embedded plist, the helper from a constant in the source:
+# three places that must agree, and a mismatch refuses every connection.
+BRIDGE_SIGNED_AS="$(codesign -dv "$APP/Contents/MacOS/apple-calendar-mcp-bridge" 2>&1 | sed -n 's/^Identifier=//p')"
+BRIDGE_IN_PLIST="$(/usr/libexec/PlistBuddy -c 'Print CFBundleIdentifier' "$ROOT/Resources/BridgeInfo.plist")"
+BRIDGE_IN_CODE="$(sed -n 's/^public let bridgeSigningIdentifier = "\(.*\)"$/\1/p' "$ROOT/Sources/AppleCalendarIPC/IPC.swift")"
+if [ "$BRIDGE_SIGNED_AS" != "$BRIDGE_IN_PLIST" ] || [ "$BRIDGE_SIGNED_AS" != "$BRIDGE_IN_CODE" ]; then
+	echo "bridge identifier: signed '${BRIDGE_SIGNED_AS:-none}', plist '${BRIDGE_IN_PLIST:-none}', code '${BRIDGE_IN_CODE:-none}'" >&2
+	echo "the helper would refuse the bridge at run time" >&2
+	exit 1
+fi
+
 # A Developer ID signature with no timestamp passes --verify and fails
 # notarisation, which is the worst order to find out. Assert it here.
 #

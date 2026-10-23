@@ -28,15 +28,12 @@ if arguments.contains("--help") || arguments.contains("-h") {
         Usage:
           apple-calendar-mcp              Serve MCP over XPC. This is how launchd starts
                                           the agent; MCP clients run the bridge instead.
-          apple-calendar-mcp --serve-stdio
-                                          Serve MCP over stdin/stdout. Development only —
-                                          a client that spawns this is never granted
-                                          calendar access. See the README.
-          apple-calendar-mcp --selftest   Report identity, permission state and visible
-                                          calendars. Exits non-zero if anything is wrong.
-          apple-calendar-mcp --request    With --selftest, ask for calendar access,
-                                          showing the system prompt if needed.
+          apple-calendar-mcp --selftest   Report identity, permission state and how many
+                                          calendars are visible. Exits non-zero if
+                                          anything is wrong.
           apple-calendar-mcp --version    Print the version.
+
+        Calendar access is granted from the AppleCalendarMCP window, not from here.
 
         Helper agent (only from inside the helper .app bundle):
           --register-agent                Register the launch agent with launchd.
@@ -48,8 +45,8 @@ if arguments.contains("--help") || arguments.contains("-h") {
                                           command. Run it from your MCP client.
           --pin-client <path>             Pin a specific application bundle.
           --show-pin                      Print the pinned client, if any.
-          --unpin-client                  Remove the pin. Any client signed by the
-                                          same team as this helper is then accepted.
+          --unpin-client                  Remove the pin. Any process that runs the
+                                          bridge is then accepted.
         """)
     exit(0)
 }
@@ -87,14 +84,21 @@ if arguments.contains("--agent-status") {
 }
 
 if arguments.contains("--selftest") {
-    let passed = await runSelfTest(requestAccess: arguments.contains("--request"))
+    let passed = await runSelfTest()
     exit(passed ? 0 : 1)
 }
 
-if arguments.contains("--serve-stdio") {
-    await runStdioService(server: Server())
-    exit(0)
+// launchd passes none (see the launch agent plist), so anything left over is a
+// mistake — or an option that no longer exists — and must not start a service.
+guard argumentList.isEmpty else {
+    print("  FAILED          unknown option: \(argumentList.joined(separator: " ")). See --help.")
+    exit(2)
 }
 
 // No arguments: this is how launchd starts the agent.
+//
+// This executable holds the calendar grant in its own name, and any process can
+// start it as its own responsible process — Claude's `disclaimer` helper does
+// exactly that. So the XPC service, with its checks on the peer, is the only
+// path here that reads or changes events. Nothing else may be added that does.
 runXPCService(server: Server())

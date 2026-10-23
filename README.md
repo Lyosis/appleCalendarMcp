@@ -50,18 +50,27 @@ Measured, not assumed:
 | bare CLI, ad-hoc signed | MCP client | refused, nothing recorded |
 | same, signed with a developer certificate | MCP client | refused |
 | same, inside an `.app` | LaunchServices | **granted** |
-| the granted `.app`'s own binary | MCP client | refused again |
+| the granted `.app`'s own binary | MCP client spawning it directly | refused again |
+| the granted `.app`'s own binary | Claude Desktop, through its `disclaimer` helper | **granted** |
 | `.app` + LaunchAgent, `SMAppService` | launchd | **granted** |
 
 The deciding variable is which process macOS holds responsible at spawn time —
 not the code, not the signature, not the Info.plist.
 
+The last-but-one row is the one that shapes the code. Claude Desktop starts its
+MCP servers through a helper that makes each of them its own responsible
+process, and any program can do the same. So the helper's executable, wherever
+it is started from, holds the calendar grant in its own name. The only path in
+it that reads or changes events is therefore the XPC service, which checks who
+is asking; the command-line options touch no event, and `--selftest` reports
+counts, never a calendar's name.
+
 ## Architecture
 
 ```
 MCP client  ──stdio──▶  bridge  ──XPC──▶  helper.app + LaunchAgent  ──EventKit──▶  Calendar
-                          │                       │
-             checks its own ancestry     checks the peer's team identity
+                                                  │
+                          checks the peer's signature, then its ancestry
 ```
 
 The bridge forwards bytes and needs no privacy permission of its own. The helper
@@ -96,7 +105,8 @@ are read by models, and diagnostics end up in public issues.
 
 - macOS 14.4 or later, set by the most demanding API used:
   `xpc_connection_set_peer_team_identity_requirement`, which lets the helper
-  accept only peers signed by the same team as itself — so you can build and
+  accept only its own bridge — the bridge's signing identifier, under the same
+  team as the helper itself — so you can build and
   sign this with your own certificate, with no team identifier to edit
 - Apple Silicon
 
@@ -237,9 +247,11 @@ apple-calendar-mcp --selftest
 ```
 
 It reports the real authorization status, the process macOS sees, whether the
-usage description is readable at runtime, and which calendars are actually
-visible. It exits non-zero when any of that fails. Include its output in any bug
-report.
+usage description is readable at runtime, whether the bridge beside it carries
+the signing identifier the helper requires, and how many calendars of each kind
+are actually visible — counts only, never their names, so the output is safe to
+paste. It exits non-zero when any of that fails. Include its output in any bug
+report. It never asks for access: that is done from the window.
 
 ## Prior art
 
