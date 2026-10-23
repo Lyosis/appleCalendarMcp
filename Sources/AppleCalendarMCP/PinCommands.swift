@@ -8,10 +8,10 @@ enum PinCommands {
         guard let text = ClientPin.requirementText() else {
             print("  pinned client   none")
             print("""
-                  warning         Without a pin, any process on this Mac signed by the
-                                  same team as this helper can read and change your
-                                  calendar through it. Run --pin-client-auto from the
-                                  MCP client you intend to use.
+                  warning         Without a pin, any process on this Mac that runs the
+                                  bridge can read and change your calendar through
+                                  the helper. Run --pin-client-auto from the MCP
+                                  client you intend to use.
                 """)
             return false
         }
@@ -53,7 +53,7 @@ enum PinCommands {
     static func unpin() -> Bool {
         do {
             try ClientPin.unpin()
-            print("  unpinned        any client signed by this team is now accepted")
+            print("  unpinned        any process that runs the bridge is now accepted")
             return true
         } catch {
             print("  FAILED          \(error.localizedDescription)")

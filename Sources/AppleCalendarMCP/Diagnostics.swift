@@ -1,7 +1,9 @@
+import AppleCalendarIPC
 import AppleCalendarSetup
 import Darwin
 import EventKit
 import Foundation
+import Security
 
 /// Measures what the process actually is, what the system actually grants it,
 /// and what it can actually read — in that order, with the checks that would
@@ -9,7 +11,10 @@ import Foundation
 ///
 /// Every section can fail. A run that prints only good news is a run where
 /// every one of those checks had the opportunity to say otherwise.
-func runSelfTest(requestAccess: Bool) async -> Bool {
+///
+/// Anything can run this with the calendar grant in hand (see main.swift), so
+/// it never asks for access and never prints a calendar's name: counts only.
+func runSelfTest() async -> Bool {
     var passed = true
 
     func check(_ label: String, _ value: String, ok: Bool?) {
@@ -55,41 +60,43 @@ func runSelfTest(requestAccess: Bool) async -> Bool {
         "\(bundleVersion ?? "absent") vs \(serverVersion)",
         ok: bundleVersion == nil ? nil : bundleVersion == serverVersion
     )
+
+    // The helper accepts only peers carrying this exact signing identifier.
+    // If the bridge beside it was signed under another one, every connection
+    // is refused, and the log is the only place that would say why.
+    let bridge = Bundle.main.bundleURL.appending(path: "Contents/MacOS/apple-calendar-mcp-bridge")
+    if FileManager.default.fileExists(atPath: bridge.path(percentEncoded: false)) {
+        let found = signingIdentifier(ofExecutableAt: bridge)
+        check(
+            "bridge identifier",
+            "\(found ?? "unreadable") vs \(bridgeSigningIdentifier)",
+            ok: found == bridgeSigningIdentifier
+        )
+    } else {
+        check("bridge identifier", "no bridge beside this executable", ok: nil)
+    }
     print("")
 
-    // MARK: Authorization — recorded status, before and after
+    // MARK: Authorization — the recorded status
 
     print("authorization")
-    let stateBefore = CalendarPermission.current()
-    check("status before", stateBefore.rawValue, ok: nil)
-
-    let access = CalendarAccess()
-    if requestAccess, stateBefore == .notDetermined {
-        print("  ...  requesting full access (a prompt may appear)")
-        let outcome = await access.requestAccess()
-        check("request returned", outcome.granted ? "granted" : "refused", ok: nil)
-        if let error = outcome.error {
-            check("request error", error, ok: false)
-        }
-        await access.reset()
-    } else if stateBefore == .notDetermined {
-        print("  ...  no decision recorded; re-run with --request to prompt")
+    let state = CalendarPermission.current()
+    check("status", state.rawValue, ok: state.canRead)
+    check("meaning", state.explanation, ok: nil)
+    if state == .notDetermined {
+        print("  ...  no decision recorded; open AppleCalendarMCP.app to grant access")
     }
-
-    let stateAfter = CalendarPermission.current()
-    check("status after", stateAfter.rawValue, ok: stateAfter.canRead)
-    check("meaning", stateAfter.explanation, ok: nil)
     print("")
 
     // MARK: Data — does the grant actually yield anything
 
     print("data")
-    guard stateAfter.canRead else {
+    guard state.canRead else {
         check("calendars readable", "skipped — no read access", ok: false)
         return finish(passed: false)
     }
 
-    let calendars = await access.calendars()
+    let calendars = await CalendarAccess().calendars()
     // Full access with zero calendars means something is wrong that the status
     // alone would not have revealed.
     check(
@@ -97,20 +104,18 @@ func runSelfTest(requestAccess: Bool) async -> Bool {
         "\(calendars.count)",
         ok: !calendars.isEmpty
     )
-    for calendar in calendars.prefix(20) {
-        let flags = calendar.isWritable ? "writable" : "read-only"
-        print("         \(calendar.source) / \(calendar.title)  (\(calendar.sourceType), \(flags))")
-    }
-    if calendars.count > 20 {
-        print("         … and \(calendars.count - 20) more")
+    let byKind = Dictionary(grouping: calendars, by: \.sourceType)
+    for (kind, members) in byKind.sorted(by: { $0.key < $1.key }) {
+        let writable = members.filter(\.isWritable).count
+        print("         \(kind): \(members.count), \(writable) writable")
     }
 
     // A test whose conditions changed while it ran proves nothing.
     let stateAtEnd = CalendarPermission.current()
     check(
         "status unchanged during run",
-        stateAtEnd == stateAfter ? "\(stateAtEnd.rawValue)" : "CHANGED: \(stateAfter.rawValue) -> \(stateAtEnd.rawValue)",
-        ok: stateAtEnd == stateAfter
+        stateAtEnd == state ? "\(stateAtEnd.rawValue)" : "CHANGED: \(state.rawValue) -> \(stateAtEnd.rawValue)",
+        ok: stateAtEnd == state
     )
 
     return finish(passed: passed)
@@ -120,6 +125,25 @@ func runSelfTest(requestAccess: Bool) async -> Bool {
         print(passed ? "selftest passed" : "selftest FAILED")
         return passed
     }
+}
+
+/// The signing identifier recorded in an executable's code signature.
+private func signingIdentifier(ofExecutableAt url: URL) -> String? {
+    var staticCode: SecStaticCode?
+    guard SecStaticCodeCreateWithPath(url as CFURL, [], &staticCode) == errSecSuccess,
+          let staticCode
+    else {
+        return nil
+    }
+    var information: CFDictionary?
+    guard SecCodeCopySigningInformation(
+            staticCode, SecCSFlags(rawValue: kSecCSSigningInformation), &information
+          ) == errSecSuccess,
+          let information = information as? [String: Any]
+    else {
+        return nil
+    }
+    return information[kSecCodeInfoIdentifier as String] as? String
 }
 
 /// The process that launched this one — the crux of how macOS attributes the

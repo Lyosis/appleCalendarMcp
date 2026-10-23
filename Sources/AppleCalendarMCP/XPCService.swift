@@ -18,21 +18,33 @@ func runXPCService(server: Server) -> Never {
     )
 
     xpc_connection_set_event_handler(listener) { event in
+        if xpc_get_type(event) == XPC_TYPE_ERROR {
+            // Measured: a process that is not the launchd job owning this name
+            // gets Connection invalid straight away and would otherwise idle
+            // forever, serving nothing. Say so and leave; launchd starts the
+            // real job again on the next message.
+            let reason = xpc_dictionary_get_string(event, XPC_ERROR_KEY_DESCRIPTION)
+                .map { String(cString: $0) } ?? "unknown error"
+            log("cannot listen on \(machServiceName): \(reason)")
+            exit(EXIT_FAILURE)
+        }
         guard xpc_get_type(event) == XPC_TYPE_CONNECTION else { return }
         accept(unsafeBitCast(event, to: xpc_connection_t.self), server: server)
     }
 
-    xpc_connection_resume(listener)
     log("listening on \(machServiceName)")
+    xpc_connection_resume(listener)
     dispatchMain()
 }
 
 /// Accepts one client connection, after checking who it is.
 private func accept(_ connection: xpc_connection_t, server: Server) {
-    // Refuse any peer not signed by the same team as this helper. Passing nil
-    // means "the same team identifier as the calling process", which survives
-    // certificate rotation where a hand-written requirement string would not.
-    let status = xpc_connection_set_peer_team_identity_requirement(connection, nil)
+    // Refuse any peer that is not our bridge: signed by the same team as this
+    // helper *and* under the bridge's signing identifier. The team is taken
+    // from this process, so it survives certificate rotation where a
+    // hand-written requirement string would not. Passing nil here would accept
+    // every binary the team has ever signed.
+    let status = xpc_connection_set_peer_team_identity_requirement(connection, bridgeSigningIdentifier)
     guard status == 0 else {
         log("refused a connection: could not require the peer's team identity (\(status))")
         xpc_connection_cancel(connection)
@@ -81,7 +93,7 @@ private func clientIsAuthorised(_ connection: xpc_connection_t) -> Bool {
     guard let requirement = ClientPin.compiled() else {
         log(
             """
-            no client is pinned: any process on this Mac signed by the same team \
+            no client is pinned: any process on this Mac that runs the bridge \
             can read and change the calendar through this helper. \
             Run `apple-calendar-mcp --pin-client-auto` from your MCP client.
             """)

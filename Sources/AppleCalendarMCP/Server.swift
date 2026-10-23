@@ -4,9 +4,9 @@ import Foundation
 /// MCP revisions this server can speak, newest first.
 private let supportedProtocolVersions = ["2025-06-18", "2025-03-26", "2024-11-05"]
 
-/// The MCP server. Transport-agnostic on purpose: the same actor serves XPC in
-/// production and stdio in development, and every side effect stays behind
-/// `CalendarAccess`.
+/// The MCP server. Transport-agnostic on purpose: XPC hands it one message at a
+/// time, so the protocol layer can be exercised without a transport, and every
+/// side effect stays behind `CalendarAccess`.
 actor Server {
     let calendar = CalendarAccess()
     let journal = WriteJournal()

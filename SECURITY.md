@@ -19,10 +19,21 @@ peculiar to this project, and it is not solved here. It is narrowed.
 
 ## What is checked
 
-**The peer must be signed by the same team as the helper.**
-`xpc_connection_set_peer_team_identity_requirement` — an attacker cannot write
-their own client, and cannot patch the bridge, because either breaks the
-signature the helper requires.
+**Events are reached only through the XPC service.** The helper's executable
+holds the calendar grant in its own name, wherever it is started from: Claude
+Desktop launches its MCP servers through a helper that makes each one its own
+responsible process for privacy purposes, and any program can do the same. So
+nothing in that executable other than the XPC service reads or changes events.
+Its command-line options touch no event, and `--selftest` prints counts, never
+a calendar's name. A copy started outside launchd cannot take over the service
+either: it is refused the Mach name, and exits.
+
+**The peer must be the bridge.**
+`xpc_connection_set_peer_team_identity_requirement`, given the bridge's signing
+identifier: the peer must be signed by the same team as the helper *and* under
+that identifier, checked on every message. An attacker cannot write their own
+client, and cannot patch the bridge, because either breaks the signature the
+helper requires — and another program signed by the same team is refused too.
 
 **The pinned client must be an ancestor of the peer.** The bridge is a public
 binary; anyone can run it. So the helper also asks who started it, walking the
@@ -61,8 +72,8 @@ Two things address that, and neither is a control:
   calendar, and the event's identifier and title. That does not prevent misuse.
   It makes misuse visible afterwards.
 
-**Nothing is pinned by default.** A fresh install accepts any client signed by
-the same team as the helper, and says so on every connection in its log.
+**Nothing is pinned by default.** A fresh install accepts any process that runs
+the bridge, and says so on every connection in its log.
 Refusing everything until someone finds the right incantation would produce a
 puzzle rather than protection — but until you pin, the second check above is
 simply not running.
