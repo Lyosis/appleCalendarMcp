@@ -111,6 +111,14 @@ Scripts/build-app.sh --sign "Your Developer ID"     # builds and installs to ~/A
 Then point your MCP client at
 `~/Applications/AppleCalendarMCP.app/Contents/MacOS/apple-calendar-mcp-bridge`.
 
+`--sign` takes a certificate name or its SHA-1 fingerprint. Use the fingerprint
+once you hold two certificates with the same name — typically an old Developer
+ID beside its replacement — or `codesign` refuses the name as ambiguous:
+
+```sh
+security find-identity -v -p codesigning     # the 40-character hash on each line
+```
+
 `swift build` alone produces the two executables but not the bundle, and the
 helper cannot obtain calendar access outside one.
 
@@ -162,6 +170,57 @@ launchctl bootout gui/$UID/com.wilfrid.B.apple-calendar-mcp.agent
 
 For the same reason, install the helper app at its final location before
 registering it the first time.
+
+### Changing the signing certificate
+
+Moving to another certificate — from Apple Development to Developer ID, or to a
+renewed Developer ID — has three consequences, all observed.
+
+**The first launch can be refused.** After rebuilding with the new certificate
+and registering again, launchd killed the helper on its first launch:
+
+```
+xpcproxy exited due to OS_REASON_CODESIGNING | Launch Constraint Violation (Constraint not matched)
+removing service since it exited with consistent failure
+```
+
+The `EX_CONFIG` and `No such process` that follow are consequences of launchd
+having removed the service, not the cause, so read the launchd log from the
+first launch onwards:
+
+```sh
+log show --last 10m --predicate 'process == "launchd" AND eventMessage CONTAINS "apple-calendar-mcp"'
+```
+
+The binary itself is fine — it runs from a shell. What cleared it was a full
+re-registration from the **new** binary:
+
+```sh
+AppleCalendarMCP.app/Contents/MacOS/apple-calendar-mcp --unregister-agent
+launchctl bootout gui/$UID/com.wilfrid.B.apple-calendar-mcp.agent   # "No such process" just means nothing was left
+AppleCalendarMCP.app/Contents/MacOS/apple-calendar-mcp --register-agent
+```
+
+Why the first registration inherited a constraint the new signature did not
+meet has not been established. The background task record keeping the previous
+signature is the likely explanation, not a proven one.
+
+**The calendar permission has to be granted again.** macOS records the grant
+against the signature, so a new certificate is a new client. Open the app and
+grant access once more.
+
+**The client pin can no longer be changed or removed.** The pin is a keychain
+item that only the build which created it may modify. A later build still
+reads it, so the client you pinned stays pinned, but `--unpin-client` fails
+with `-25244` (*invalid attempt to change the owner of this item*) — and so do
+the window's Remove button and pinning a different client, which go through
+the same deletion. This is a known limitation, to be fixed. Until then, the
+item can presumably be removed directly, though this has not been tried yet
+and macOS may ask for your login password:
+
+```sh
+security delete-generic-password -s com.wilfrid.B.apple-calendar-mcp -a pinned-client-requirement
+```
 
 ## Checking your machine
 
