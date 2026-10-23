@@ -114,7 +114,7 @@ Then point your MCP client at
 `swift build` alone produces the two executables but not the bundle, and the
 helper cannot obtain calendar access outside one.
 
-Two things the build script handles that are easy to get wrong by hand:
+Three things the build script handles that are easy to get wrong by hand:
 
 - **It stages in `/tmp`.** A checkout inside iCloud Drive — `~/Documents` and
   `~/Desktop` are synced by default — collects `com.apple.FinderInfo` and file
@@ -125,6 +125,18 @@ Two things the build script handles that are easy to get wrong by hand:
   so the bridge keeps SwiftPM's ad-hoc signature and the helper then refuses it
   for having no team identifier. `codesign --verify --strict` passes anyway, so
   the script compares the team identifier of every executable instead.
+- **It grants the calendar entitlement under the hardened runtime.**
+  Notarisation requires the hardened runtime, and under it a process without
+  `com.apple.security.personal-information.calendars` can ask for calendar
+  access and simply never see a prompt. The window and the helper are signed
+  with it; the bridge, which never touches EventKit, is not — and the script
+  checks all three. Signing the bundle re-signs the window, so the entitlement
+  has to be passed there too or it is silently dropped.
+
+  This one is easy to miss for a reason worth knowing: a grant obtained
+  earlier survives rebuilds signed with the same certificate, so an existing
+  install keeps working without the entitlement. Only a fresh grant — a new
+  machine, or a different certificate — exposes it.
 
 ## Development
 
