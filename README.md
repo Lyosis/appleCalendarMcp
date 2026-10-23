@@ -17,14 +17,25 @@ the calendar database already on your Mac rather than a web API.
 |---|---|
 | `check_access` | permission state, and what to do about it |
 | `list_calendars` | every calendar, its identifier, whether it accepts changes |
-| `list_events` | events in a range, recurrences expanded |
-| `search_events` | text across title, location and notes |
-| `find_free_slots` | openings of a given length inside working hours |
+| `list_events` | events in a range of up to ten years, recurrences expanded |
+| `search_events` | text across title, location and notes, up to ten years |
+| `find_free_slots` | openings of a given length inside working hours, up to a year |
 | `create_event` | |
-| `update_event` | only the fields you pass; one occurrence or the series |
-| `delete_event` | one event per call, requires `confirm: true` |
+| `update_event` | only the fields you pass; one occurrence, it and the later ones, or the series — said explicitly |
+| `delete_event` | one event — or one recurring series, when `span` says so — per call; requires `confirm: true` |
 
 Every change is appended to `~/Library/Logs/apple-calendar-mcp-writes.log`.
+
+Timestamps are ISO 8601 and parsed strictly: `2026-09-04T14:30:00+02:00`, the
+same with `Z` or `+0200`, or without an offset — then in the Mac's time zone —
+or a bare `2026-09-04` for midnight. Anything else is refused with a message
+rather than read as something close: an impossible date, an hour skipped by a
+daylight-saving change, a year outside 1900–2200. An empty or inverted range is
+refused too, instead of answering "no events".
+
+A recurring event is never addressed by default. Pass `occurrenceStart` with
+`span` set to `thisEvent` or `futureEvents`, or `span: "series"` for every
+occurrence; anything else is refused and nothing changes.
 
 Event titles, locations, notes and attendee names are written by other people
 and arrive unfiltered from invitations. Responses carrying them say so, and the
@@ -180,6 +191,20 @@ launchctl bootout gui/$UID/com.wilfrid.B.apple-calendar-mcp.agent
 
 For the same reason, install the helper app at its final location before
 registering it the first time.
+
+### Tests
+
+The unit tests cover the logic where a mistake is silent: timestamp parsing,
+range limits, free-slot arithmetic, the `span` values and the tool catalogue.
+They do not touch EventKit — that needs a granted helper and a test calendar.
+
+```sh
+swift test --scratch-path /tmp/apple-calendar-mcp-tests
+```
+
+The scratch path matters in a checkout inside iCloud Drive, for the reason the
+build script stages in `/tmp`: the file provider marks the test bundle with
+attributes `codesign` refuses, and `swift test` then fails to sign it.
 
 ### Changing the signing certificate
 

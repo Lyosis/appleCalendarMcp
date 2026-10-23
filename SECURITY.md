@@ -69,8 +69,9 @@ Two things address that, and neither is a control:
   them. Free-text fields are withheld unless a caller passes `includeDetails`.
 - Every create, update and delete is appended to
   `~/Library/Logs/apple-calendar-mcp-writes.log`, with a timestamp, the
-  calendar, and the event's identifier and title. That does not prevent misuse.
-  It makes misuse visible afterwards.
+  calendar, the event's identifier and title, the span, and for a recurring
+  event the occurrence addressed and how the series repeats. That does not
+  prevent misuse. It makes misuse visible afterwards.
 
 **Nothing is pinned by default.** A fresh install accepts any process that runs
 the bridge, and says so on every connection in its log.
@@ -84,9 +85,11 @@ exited, and a reused id there would be a way to spoof the chain. Closing this
 properly needs audit tokens, which the public XPC API does not expose for a
 connection's ancestors.
 
-**Deletion is limited, not prevented.** `delete_event` removes one event per
-call and refuses without `confirm: true`. A caller that means harm can call it
-repeatedly.
+**Deletion is limited, not prevented.** `delete_event` refuses without
+`confirm: true` and removes one event per call — or one whole recurring series,
+when the caller passes `span: "series"`, which a caller that means harm can do
+as easily as anything else. It can also call it repeatedly. `confirm` and
+`span` guard against mistakes, not against intent: the model sets both.
 
 **The permission model rests on undocumented behaviour.** See the README: macOS
 attributes a privacy request to the responsible process up the launch chain,
