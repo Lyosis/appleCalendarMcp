@@ -58,10 +58,9 @@ extension CalendarAccess {
         dayStartHour: Int,
         dayEndHour: Int
     ) throws -> [DateInterval] {
-        // An event marked "free" — the way all-day markers usually are — does
-        // not make the person unavailable.
         let busy = try events(from: start, to: end, calendarIDs: calendarIDs)
-            .filter { $0.availability != "free" && $0.end > $0.start }
+            .filter { Self.blocksTime(availability: $0.availability, isAllDay: $0.isAllDay) }
+            .filter { $0.end > $0.start }
             .map { DateInterval(start: $0.start, end: $0.end) }
             .sorted { $0.start < $1.start }
 
@@ -74,6 +73,21 @@ extension CalendarAccess {
             dayEndHour: dayEndHour,
             calendar: .current
         )
+    }
+
+    /// Whether an event makes the person unavailable.
+    ///
+    /// An event marked free does not. Nor does an all-day event whose calendar
+    /// records no availability at all: measured on 2026-10-25, every birthday
+    /// and every public holiday reports it that way, and counting them as busy
+    /// emptied the whole day around them. A *timed* event without availability
+    /// still blocks — a subscribed calendar can carry real appointments.
+    static func blocksTime(availability: String, isAllDay: Bool) -> Bool {
+        switch availability {
+        case "free": false
+        case "unknown": !isAllDay
+        default: true
+        }
     }
 
     /// The working-hours openings of each day, given busy intervals that are

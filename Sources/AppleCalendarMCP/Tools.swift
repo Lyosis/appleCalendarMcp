@@ -83,8 +83,10 @@ extension Server {
                     "find_free_slots",
                     """
                     Find openings of at least a given length, within working hours, over \
-                    a range of up to one year. Events marked free — as all-day markers \
-                    usually are — do not block a slot.
+                    a range of up to one year. Events marked free do not block a slot, \
+                    nor do all-day events from calendars that record no availability — \
+                    birthdays and public holidays. A day off is therefore not excluded: \
+                    check list_events when that matters.
                     """,
                     properties: [
                         "start": schema("string", "Start of the range to search, ISO 8601."),
