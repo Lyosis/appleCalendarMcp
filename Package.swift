@@ -82,11 +82,12 @@ let package = Package(
             swiftSettings: strictConcurrency
         ),
         // The pure logic of the tools — timestamps, ranges, openings, spans —
-        // which is where the silent mistakes were. EventKit itself is not
+        // and of the bridge's own error reply, which is where the silent
+        // mistakes were. EventKit itself is not
         // exercised here: that needs a granted process and a test calendar.
         .testTarget(
             name: "AppleCalendarMCPTests",
-            dependencies: ["AppleCalendarMCP"],
+            dependencies: ["AppleCalendarMCP", "AppleCalendarBridge"],
             path: "Tests/AppleCalendarMCPTests",
             swiftSettings: strictConcurrency
         ),

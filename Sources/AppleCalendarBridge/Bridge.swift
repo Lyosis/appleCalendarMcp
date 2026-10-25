@@ -7,19 +7,14 @@ import os
 ///
 /// The bridge deliberately understands nothing about MCP: it moves lines. That
 /// is what lets it stay free of any privacy permission of its own — the helper
-/// holds the calendar access, and this process only carries bytes to it.
+/// holds the calendar access, and this process only carries bytes to it. The
+/// one exception is the error it writes when the helper cannot answer; see
+/// `BridgeReply`.
 func runBridge() async {
     let queue = DispatchQueue(label: machServiceName + ".bridge", attributes: .concurrent)
     let output = OutputWriter()
 
-    let connection = xpc_connection_create_mach_service(machServiceName, queue, 0)
-    xpc_connection_set_event_handler(connection) { event in
-        guard xpc_get_type(event) == XPC_TYPE_ERROR else { return }
-        log("cannot reach the helper — check `apple-calendar-mcp --agent-status`")
-    }
-    xpc_connection_resume(connection)
-
-    let peer = XPCBox(connection)
+    let helper = HelperConnection(queue: queue)
     let pending = PendingReplies()
 
     do {
@@ -33,10 +28,17 @@ func runBridge() async {
             // Asynchronous so a slow calendar query cannot stall the messages
             // queued behind it; JSON-RPC matches replies by id, not by order.
             pending.enter()
+            let peer = XPCBox(helper.current())
             xpc_connection_send_message_with_reply(peer.value, request, queue) { reply in
                 defer { pending.leave() }
                 guard xpc_get_type(reply) == XPC_TYPE_DICTIONARY else {
-                    log("the helper did not reply")
+                    log("the helper did not reply — answering the request with an error")
+                    helper.noteFailure(reply, on: peer.value)
+                    // Never resent: a change the helper did carry out before
+                    // it went away would be made twice. The client decides.
+                    if let error = BridgeReply.unreachable(answering: message) {
+                        output.send(error)
+                    }
                     return
                 }
                 guard let raw = xpc_dictionary_get_string(reply, IPCKey.response),
