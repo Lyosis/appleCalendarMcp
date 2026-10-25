@@ -77,6 +77,25 @@ func runSelfTest() async -> Bool {
     }
     print("")
 
+    // MARK: Client — does the installed client still match the compiled policy
+
+    // A signing change on the client's side would turn every connection into
+    // a refusal. This says so before anyone has to read the log to find out.
+    print("client")
+    for step in ClientPolicy.steps {
+        guard FileManager.default.fileExists(atPath: step.installedPath) else {
+            check(step.name, "not found at \(step.installedPath)", ok: nil)
+            continue
+        }
+        let matches = staticCode(at: step.installedPath, satisfies: step)
+        check(
+            step.name,
+            matches ? "signature matches the policy" : "SIGNATURE DOES NOT MATCH — connections will be refused",
+            ok: matches
+        )
+    }
+    print("")
+
     // MARK: Authorization — the recorded status
 
     print("authorization")
@@ -144,6 +163,19 @@ private func signingIdentifier(ofExecutableAt url: URL) -> String? {
         return nil
     }
     return information[kSecCodeInfoIdentifier as String] as? String
+}
+
+/// Whether the program on disk satisfies a policy step's requirement.
+private func staticCode(at path: String, satisfies step: ClientPolicy.Step) -> Bool {
+    var staticCode: SecStaticCode?
+    guard let requirement = ClientPolicy.compiled(step),
+          SecStaticCodeCreateWithPath(URL(fileURLWithPath: path) as CFURL, [], &staticCode)
+            == errSecSuccess,
+          let staticCode
+    else {
+        return false
+    }
+    return SecStaticCodeCheckValidity(staticCode, [], requirement) == errSecSuccess
 }
 
 /// The process that launched this one — the crux of how macOS attributes the

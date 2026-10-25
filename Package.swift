@@ -50,9 +50,9 @@ let package = Package(
             path: "Sources/AppleCalendarIPC",
             swiftSettings: strictConcurrency
         ),
-        // Permission, agent registration and client pinning: everything the
-        // installer window and the helper both need. Shared rather than
-        // duplicated, so there is one implementation of the security checks.
+        // Permission, agent registration and process inspection: what the
+        // installer window and the helper need from the system. Shared rather
+        // than duplicated, so each is implemented once.
         .target(
             name: "AppleCalendarSetup",
             path: "Sources/AppleCalendarSetup",

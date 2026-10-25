@@ -244,5 +244,4 @@ echo "         $(sed -En '/^(Signature|Timestamp)=/{p;q;}' <<<"$INSTALLED")"
 echo
 echo "next:"
 echo "  '$DESTINATION/Contents/MacOS/apple-calendar-mcp' --register-agent"
-echo "  '$DESTINATION/Contents/MacOS/apple-calendar-mcp' --pin-client-auto"
 echo "  bridge: $DESTINATION/Contents/MacOS/apple-calendar-mcp-bridge"

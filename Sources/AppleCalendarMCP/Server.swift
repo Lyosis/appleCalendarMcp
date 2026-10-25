@@ -20,31 +20,21 @@ actor Server {
         do {
             request = try JSONDecoder().decode(RPCRequest.self, from: Data(message.utf8))
         } catch {
-            return encode(RPCResponse.failure(id: .null, error: .parseError()))
+            return RPCResponse.encode(RPCResponse.failure(id: .null, error: .parseError()))
         }
 
         guard let id = request.id else { return nil }
 
         do {
             let result = try await perform(request)
-            return encode(RPCResponse.success(id: id, result: result))
+            return RPCResponse.encode(RPCResponse.success(id: id, result: result))
         } catch let error as RPCError {
-            return encode(RPCResponse.failure(id: id, error: error))
+            return RPCResponse.encode(RPCResponse.failure(id: id, error: error))
         } catch {
-            return encode(
+            return RPCResponse.encode(
                 RPCResponse.failure(id: id, error: .internalError(error.localizedDescription))
             )
         }
-    }
-
-    private func encode(_ value: JSONValue) -> String? {
-        let encoder = JSONEncoder()
-        encoder.outputFormatting = [.withoutEscapingSlashes]
-        guard let data = try? encoder.encode(value) else {
-            log("dropped a reply that could not be encoded")
-            return nil
-        }
-        return String(decoding: data, as: UTF8.self)
     }
 
     private func perform(_ request: RPCRequest) async throws -> JSONValue {
