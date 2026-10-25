@@ -184,7 +184,7 @@ launchd resolves the agent to the path the helper app had **when it was
 registered**. Rebuilding into a different directory, or deleting the bundle
 without unregistering first, leaves launchd pointing at a path that no longer
 exists. It then refuses the job with `EX_CONFIG`, and the only visible symptom
-is that the bridge never receives a reply — `launchctl print` will still show
+is that the helper never answers — `launchctl print` will still show
 the *new* bundle identifier while resolving the *old* path, so trust the
 launchd log rather than the printed state.
 
@@ -202,6 +202,12 @@ launchctl bootout gui/$UID/com.wilfrid.B.apple-calendar-mcp.agent
 
 For the same reason, install the helper app at its final location before
 registering it the first time.
+
+A reinstall does not strand a running bridge. Unregistering invalidates its
+connection for good, so the bridge opens a new one on the next message; while
+the helper is away, each request is answered at once with error `-32002`
+rather than left to time out. Requests are never resent: one the helper had
+already carried out would be made twice.
 
 ### Tests
 
