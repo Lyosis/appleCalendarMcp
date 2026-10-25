@@ -22,11 +22,6 @@ final class SetupModel {
     private(set) var access: AccessState = .notDetermined
     private(set) var helper: HelperState = .notInstalled
 
-    /// The pinned client's bundle identifier — the part of a designated
-    /// requirement a person can recognise, the rest being certificate plumbing.
-    private(set) var pinnedIdentifier: String?
-    private(set) var isPinned = false
-
     /// The action in flight, so the window can disable the rest.
     private(set) var busy: String?
     private(set) var failure: String?
@@ -47,12 +42,6 @@ final class SetupModel {
         """
     }
 
-    /// A likely client to offer as a shortcut, when one is installed.
-    var suggestedClient: String? {
-        let candidates = ["/Applications/Claude.app"]
-        return candidates.first { FileManager.default.fileExists(atPath: $0) }
-    }
-
     func refresh() {
         access = CalendarPermission.current()
 
@@ -62,10 +51,6 @@ final class SetupModel {
             case .requiresApproval: .needsApproval
             default: .notInstalled
             }
-
-        let requirement = ClientPin.requirementText()
-        isPinned = requirement != nil
-        pinnedIdentifier = requirement?.firstMatch(of: /identifier "([^"]+)"/).map { String($0.1) }
     }
 
     // MARK: - Actions
@@ -86,14 +71,6 @@ final class SetupModel {
 
     func removeHelper() async {
         await run("helper") { try ServiceControl.unregister() }
-    }
-
-    func pin(applicationAt path: String) async {
-        await run("pin") { _ = try ClientPin.pin(applicationAt: path) }
-    }
-
-    func unpin() async {
-        await run("pin") { try ClientPin.unpin() }
     }
 
     // MARK: - Plumbing

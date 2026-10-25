@@ -1,10 +1,8 @@
 import AppleCalendarSetup
 import SwiftUI
-import UniformTypeIdentifiers
 
 struct SetupWindow: View {
     @State private var model = SetupModel()
-    @State private var choosingClient = false
     @State private var copied = false
 
     var body: some View {
@@ -16,7 +14,7 @@ struct SetupWindow: View {
                 Divider()
                 helperRow
                 Divider()
-                pinRow
+                clientRow
             }
             .background(.quaternary.opacity(0.4), in: .rect(cornerRadius: 10))
 
@@ -32,20 +30,13 @@ struct SetupWindow: View {
         .padding(24)
         .frame(width: 560)
         .task { model.refresh() }
-        .fileImporter(
-            isPresented: $choosingClient,
-            allowedContentTypes: [.application]
-        ) { result in
-            guard case .success(let url) = result else { return }
-            Task { await model.pin(applicationAt: url.path(percentEncoded: false)) }
-        }
     }
 
     // The window's title bar already names the app; repeating it here would
     // spend the top of the window saying nothing.
     private var header: some View {
         Text(
-            "Three things have to be true before an assistant can reach your calendar.",
+            "Two things have to be true before an assistant can reach your calendar.",
             bundle: .module
         )
         .font(.title3)
@@ -120,50 +111,19 @@ struct SetupWindow: View {
         }
     }
 
-    private var pinRow: some View {
+    // Not a step: nothing to do, nothing to undo. Said here so nobody goes
+    // looking for a setting that does not exist.
+    private var clientRow: some View {
         SetupRow(
             title: Text("Allowed client", bundle: .module),
-            detail: pinDetail,
-            isDone: model.isPinned
-        ) {
-            HStack(spacing: 8) {
-                if model.isPinned {
-                    Button { Task { await model.unpin() } } label: {
-                        Text("Remove", bundle: .module)
-                    }
-                } else if let suggested = model.suggestedClient {
-                    Button(name(of: suggested)) {
-                        Task { await model.pin(applicationAt: suggested) }
-                    }
-                }
-                Button { choosingClient = true } label: {
-                    Text("Choose…", bundle: .module)
-                }
-            }
-            .disabled(model.busy != nil)
-        }
-    }
-
-    private var pinDetail: Text {
-        guard model.isPinned else {
-            return Text(
-                """
-                Nothing is pinned. Any application signed by the same team as this one \
-                can reach your calendar through the helper.
-                """,
+            detail: Text(
+                "Claude Desktop only. This is built into this version; any other client is refused.",
                 bundle: .module
-            )
+            ),
+            isDone: nil
+        ) {
+            EmptyView()
         }
-        // A pin with no readable identifier is still a pin; say the true thing
-        // rather than inventing a name for it.
-        guard let identifier = model.pinnedIdentifier else {
-            return Text("Only the pinned application may use the helper.", bundle: .module)
-        }
-        return Text("Only \(identifier) may use the helper.", bundle: .module)
-    }
-
-    private func name(of path: String) -> String {
-        URL(fileURLWithPath: path).deletingPathExtension().lastPathComponent
     }
 
     // MARK: - Configuration
@@ -214,22 +174,19 @@ struct SetupWindow: View {
 }
 
 /// One line of the checklist: what it is, where it stands, what to do about it.
+/// `isDone` is nil for a line that only informs.
 private struct SetupRow<Actions: View>: View {
     let title: Text
     let detail: Text
-    let isDone: Bool
+    let isDone: Bool?
     @ViewBuilder let actions: Actions
 
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
-            Image(systemName: isDone ? "checkmark.circle.fill" : "circle.dashed")
-                .foregroundStyle(isDone ? .green : .secondary)
+            Image(systemName: symbol)
+                .foregroundStyle(isDone == true ? .green : .secondary)
                 .font(.title3)
-                .accessibilityLabel(
-                    isDone
-                        ? Text("Done", bundle: .module)
-                        : Text("Not done yet", bundle: .module)
-                )
+                .accessibilityLabel(stateLabel)
 
             VStack(alignment: .leading, spacing: 2) {
                 title.font(.headline)
@@ -243,5 +200,21 @@ private struct SetupRow<Actions: View>: View {
             actions
         }
         .padding(12)
+    }
+
+    private var symbol: String {
+        switch isDone {
+        case true: "checkmark.circle.fill"
+        case false: "circle.dashed"
+        case nil: "info.circle"
+        }
+    }
+
+    private var stateLabel: Text {
+        switch isDone {
+        case true: Text("Done", bundle: .module)
+        case false: Text("Not done yet", bundle: .module)
+        case nil: Text("Information", bundle: .module)
+        }
     }
 }

@@ -28,13 +28,6 @@
         }
       }
     },
-    "Choose…" : {
-      "localizations" : {
-        "fr" : {
-          "stringUnit" : { "state" : "translated", "value" : "Choisir…" }
-        }
-      }
-    },
     "Copied" : {
       "localizations" : {
         "fr" : {
@@ -89,10 +82,31 @@
         }
       }
     },
+    "Information" : {
+      "comment" : "VoiceOver label for a setup line that only informs",
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Information"
+          }
+        }
+      }
+    },
     "Calendar access" : {
       "localizations" : {
         "fr" : {
           "stringUnit" : { "state" : "translated", "value" : "Accès au calendrier" }
+        }
+      }
+    },
+    "Claude Desktop only. This is built into this version; any other client is refused." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Claude Desktop uniquement. C’est intégré à cette version ; tout autre client est refusé."
+          }
         }
       }
     },
@@ -115,37 +129,6 @@
       "localizations" : {
         "fr" : {
           "stringUnit" : { "state" : "translated", "value" : "Pas encore fait" }
-        }
-      }
-    },
-    "Nothing is pinned. Any application signed by the same team as this one can reach your calendar through the helper." : {
-      "localizations" : {
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Aucun client épinglé. Toute application signée par la même équipe que celle-ci peut atteindre votre calendrier par le service d’arrière-plan."
-          }
-        }
-      }
-    },
-    "Only %@ may use the helper." : {
-      "localizations" : {
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Seul %@ peut utiliser le service d’arrière-plan."
-          }
-        }
-      }
-    },
-    "Only the pinned application may use the helper." : {
-      "comment" : "Fallback when the pinned requirement carries no readable identifier",
-      "localizations" : {
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Seule l’application épinglée peut utiliser le service d’arrière-plan."
-          }
         }
       }
     },
@@ -203,12 +186,12 @@
         }
       }
     },
-    "Three things have to be true before an assistant can reach your calendar." : {
+    "Two things have to be true before an assistant can reach your calendar." : {
       "localizations" : {
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Trois conditions doivent être réunies pour qu’un assistant atteigne votre calendrier."
+            "value" : "Deux conditions doivent être réunies pour qu’un assistant atteigne votre calendrier."
           }
         }
       }

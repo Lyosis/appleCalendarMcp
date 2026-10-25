@@ -52,11 +52,12 @@ private func accept(_ connection: xpc_connection_t, server: Server) {
     }
 
     // The team check says the peer is our bridge. It says nothing about who
-    // started it — and the bridge is a public binary anyone can run. So also
-    // require that the pinned client is somewhere above it.
-    guard clientIsAuthorised(connection) else {
-        xpc_connection_cancel(connection)
-        return
+    // started it — and the bridge is a public binary anyone can run. So the
+    // processes above it must be exactly the allowed client's.
+    let pid = xpc_connection_get_pid(connection)
+    let verdict = ClientPolicy.evaluate(peer: pid, using: SystemProcessInspector())
+    if case .refused(let reason) = verdict {
+        log("refused a connection: \(reason) — chain: \(Ancestry.summary(from: pid))")
     }
 
     let peer = XPCBox(connection)
@@ -72,9 +73,17 @@ private func accept(_ connection: xpc_connection_t, server: Server) {
         let incoming = XPCBox(event)
         Task {
             guard let reply = xpc_dictionary_create_reply(incoming.value) else { return }
+            // A refused connection is answered rather than cut: cancelling it
+            // left the client waiting on replies that never came, with nothing
+            // to tell the person why. It never reaches the server.
+            let response =
+                switch verdict {
+                case .allowed: await server.respond(to: message)
+                case .refused: RPCResponse.refusal(to: message, reason: ClientPolicy.refusalMessage)
+                }
             // A notification produces no response, and the empty reply is what
             // releases the bridge's pending callback.
-            if let response = await server.respond(to: message) {
+            if let response {
                 xpc_dictionary_set_string(reply, IPCKey.response, response)
             }
             xpc_connection_send_message(peer.value, reply)
@@ -82,30 +91,4 @@ private func accept(_ connection: xpc_connection_t, server: Server) {
     }
 
     xpc_connection_resume(connection)
-}
-
-/// Whether the pinned client is an ancestor of the connecting process.
-///
-/// With nothing pinned this returns true and says so: refusing every client on
-/// a fresh install would be a puzzle, not a protection. The warning is the
-/// honest half of that trade.
-private func clientIsAuthorised(_ connection: xpc_connection_t) -> Bool {
-    guard let requirement = ClientPin.compiled() else {
-        log(
-            """
-            no client is pinned: any process on this Mac that runs the bridge \
-            can read and change the calendar through this helper. \
-            Run `apple-calendar-mcp --pin-client-auto` from your MCP client.
-            """)
-        return true
-    }
-
-    let pid = xpc_connection_get_pid(connection)
-    let chain = Ancestry.chain(from: pid)
-    guard chain.contains(where: { Ancestry.satisfies(pid: $0, requirement: requirement) }) else {
-        let names = chain.compactMap { Ancestry.path(of: $0) }.joined(separator: " <- ")
-        log("refused a connection: the pinned client is not among \(names)")
-        return false
-    }
-    return true
 }

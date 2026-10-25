@@ -6,10 +6,10 @@ the calendar database already on your Mac rather than a web API.
 
 > **Status: work in progress. No installer yet.**
 > The architecture, the permission model, all eight tools and the client
-> pinning work end to end, verified against real calendars. What is missing:
+> policy work end to end, verified against real calendars. What is missing:
 > an installer and notarisation, so installing today means building it
 > yourself. Read [SECURITY.md](SECURITY.md) before you do — it says plainly
-> what the pinning protects and what it does not.
+> what the client policy protects and what it does not.
 
 ## Tools
 
@@ -90,23 +90,25 @@ permission in its own name.
 
 Splitting the process this way creates a local endpoint that holds a permission
 — a confused deputy. The helper therefore checks both that the peer is signed by
-its own team and that the client you pinned is somewhere above it in the process
-tree:
+its own team and that the processes above it are exactly Claude Desktop's:
 
-```sh
-apple-calendar-mcp --pin-client-auto      # run this from your MCP client
 ```
+bridge  <-  disclaimer  <-  Claude Desktop  <-  launchd
+```
+
+**Claude Desktop is the only client.** That is compiled into the helper, not a
+setting; any other client is refused with a JSON-RPC error that says so.
 
 That narrows the exposure; it does not close it. [SECURITY.md](SECURITY.md) sets
 out what each check covers, and the four things none of them do.
 
 ## The setup window
 
-Opening `AppleCalendarMCP.app` shows the three things that have to be true —
-calendar access, the helper registered, a client pinned — each one a reading
-taken from the system rather than a checkbox recording what was once done, so
-revoking a permission in System Settings shows up here. It also prints the
-configuration line to paste into your client.
+Opening `AppleCalendarMCP.app` shows the two things that have to be true —
+calendar access and the helper registered — each one a reading taken from the
+system rather than a checkbox recording what was once done, so revoking a
+permission in System Settings shows up here. It also says which client is
+allowed, and prints the configuration line to paste into Claude Desktop.
 
 Available in English and French, following the system language. The command
 line, the logs and the MCP tool descriptions stay in English: tool descriptions
@@ -126,11 +128,20 @@ are read by models, and diagnostics end up in public issues.
 ```sh
 Scripts/build-app.sh --sign "Your Developer ID"     # builds and installs to ~/Applications
 "$HOME/Applications/AppleCalendarMCP.app/Contents/MacOS/apple-calendar-mcp" --register-agent
-"$HOME/Applications/AppleCalendarMCP.app/Contents/MacOS/apple-calendar-mcp" --pin-client-auto
 ```
 
-Then point your MCP client at
-`~/Applications/AppleCalendarMCP.app/Contents/MacOS/apple-calendar-mcp-bridge`.
+Then add the bridge to Claude Desktop's configuration,
+`~/Library/Application Support/Claude/claude_desktop_config.json`:
+
+```json
+"apple-calendar": {
+  "command": "/Users/you/Applications/AppleCalendarMCP.app/Contents/MacOS/apple-calendar-mcp-bridge"
+}
+```
+
+**Quit Claude Desktop before editing that file**, then start it again. It keeps
+the configuration in memory and rewrites the whole file often: an entry added
+while it runs was measured gone within seconds.
 
 `--sign` takes a certificate name or its SHA-1 fingerprint. Use the fingerprint
 once you hold two certificates with the same name — typically an old Developer
@@ -209,8 +220,7 @@ attributes `codesign` refuses, and `swift test` then fails to sign it.
 ### Changing the signing certificate
 
 Moving to another certificate — from Apple Development to Developer ID, or to a
-renewed Developer ID — has two consequences, both observed, and one more was
-seen once.
+renewed Developer ID — has two consequences, both observed.
 
 **The first launch can be refused.** After rebuilding with the new certificate
 and registering again, launchd killed the helper on its first launch:
@@ -245,19 +255,6 @@ signature is the likely explanation, not a proven one.
 against the signature, so a new certificate is a new client. Open the app and
 grant access once more.
 
-**Seen once: a pin that could not be removed.** A rebuilt helper failed to
-remove a pin created by an earlier build, with `-25244` (*invalid attempt to
-change the owner of this item*); the window's Remove button and re-pinning go
-through the same deletion. It did not happen again on the next certificate
-change — the new build removed an older build's pin without trouble — and the
-cause is not known. If you hit it, removing the keychain item directly works
-(verified, without a password prompt), after which you pin again:
-
-```sh
-security delete-generic-password -s com.wilfrid.B.apple-calendar-mcp -a pinned-client-requirement
-AppleCalendarMCP.app/Contents/MacOS/apple-calendar-mcp --pin-client /Applications/Claude.app
-```
-
 ## Checking your machine
 
 The architecture above depends on how macOS attributes calendar permission.
@@ -288,8 +285,8 @@ with `open -W`, passing results back through files.
 
 This project is narrower on purpose and spends the difference on the trust
 boundary: one launch agent held open over XPC rather than a launch per call,
-peers required to share the helper's team identifier, the client pinned at
-install time, and every write journalled.
+peers required to share the helper's team identifier, the client's exact
+launch chain compiled in, and every write journalled.
 
 Two things here are owed to it directly: that re-signing an unchanged bundle
 drops the calendar grant, and that an ad-hoc signature is pinned by content

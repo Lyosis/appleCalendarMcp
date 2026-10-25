@@ -22,11 +22,26 @@ public enum Ancestry {
     }
 
     public static func parent(of pid: pid_t) -> pid_t? {
+        processInfo(pid)?.kp_eproc.e_ppid
+    }
+
+    /// When a process started, in microseconds since 1970.
+    ///
+    /// A parent cannot have started after its child. A process id that reads
+    /// otherwise has been reused by another process since — which is how the
+    /// policy tells a live ancestor from an impostor holding its old number.
+    public static func startTime(of pid: pid_t) -> UInt64? {
+        guard let started = processInfo(pid)?.kp_proc.p_starttime else { return nil }
+        return UInt64(started.tv_sec) * 1_000_000 + UInt64(started.tv_usec)
+    }
+
+    private static func processInfo(_ pid: pid_t) -> kinfo_proc? {
         var info = kinfo_proc()
         var size = MemoryLayout<kinfo_proc>.stride
         var mib: [Int32] = [CTL_KERN, KERN_PROC, KERN_PROC_PID, pid]
+        // A pid nobody holds still succeeds, with nothing written: size is 0.
         guard sysctl(&mib, 4, &info, &size, nil, 0) == 0, size > 0 else { return nil }
-        return info.kp_eproc.e_ppid
+        return info
     }
 
     public static func path(of pid: pid_t) -> String? {
@@ -40,8 +55,8 @@ public enum Ancestry {
     ///
     /// Identifying by process id carries a reuse race for ancestors, which may
     /// have exited: the direct peer is safe, because an open XPC connection
-    /// keeps it alive, but a grandparent is not. Stated in SECURITY.md rather
-    /// than papered over.
+    /// keeps it alive, but a grandparent is not. Callers compare start times
+    /// around this check — see `ClientPolicy`.
     public static func satisfies(pid: pid_t, requirement: SecRequirement) -> Bool {
         var code: SecCode?
         let attributes = [kSecGuestAttributePid: NSNumber(value: pid)] as CFDictionary
@@ -51,26 +66,6 @@ public enum Ancestry {
             return false
         }
         return SecCodeCheckValidity(code, [], requirement) == errSecSuccess
-    }
-
-    /// The application bundle a process's executable lives in, if any.
-    public static func bundlePath(forExecutable path: String) -> String? {
-        guard let range = path.range(of: ".app/Contents/MacOS/") else { return nil }
-        return String(path[path.startIndex..<range.lowerBound]) + ".app"
-    }
-
-    /// The outermost application above this process — the one a person launched.
-    ///
-    /// Used by --pin-client-auto: whoever is running us is, by construction,
-    /// whoever is installing us.
-    public static func launchingApplication() -> String? {
-        var found: String?
-        for pid in chain(from: getpid()) {
-            if let path = path(of: pid), let bundle = bundlePath(forExecutable: path) {
-                found = bundle  // keep going; the last one is closest to launchd
-            }
-        }
-        return found
     }
 
     /// The ancestry as readable paths, for diagnostics.

@@ -5,16 +5,6 @@ import Foundation
 let argumentList = Array(CommandLine.arguments.dropFirst())
 let arguments = Set(argumentList)
 
-/// The value following a flag, for the options that take one.
-func value(after flag: String) -> String? {
-    guard let index = argumentList.firstIndex(of: flag),
-          argumentList.index(after: index) < argumentList.endIndex
-    else {
-        return nil
-    }
-    return argumentList[argumentList.index(after: index)]
-}
-
 if arguments.contains("--version") {
     print(serverVersion)
     exit(0)
@@ -40,35 +30,10 @@ if arguments.contains("--help") || arguments.contains("-h") {
           --unregister-agent              Remove it.
           --agent-status                  Report its registration state.
 
-        Which client may use the calendar:
-          --pin-client-auto               Pin whichever application launched this
-                                          command. Run it from your MCP client.
-          --pin-client <path>             Pin a specific application bundle.
-          --show-pin                      Print the pinned client, if any.
-          --unpin-client                  Remove the pin. Any process that runs the
-                                          bridge is then accepted.
+        Only Claude Desktop may use the calendar. That is compiled in, not a
+        setting: see SECURITY.md.
         """)
     exit(0)
-}
-
-if arguments.contains("--show-pin") {
-    exit(PinCommands.show() ? 0 : 1)
-}
-
-if arguments.contains("--pin-client-auto") {
-    exit(PinCommands.pinLaunchingApplication() ? 0 : 1)
-}
-
-if arguments.contains("--pin-client") {
-    guard let path = value(after: "--pin-client") else {
-        print("  FAILED          --pin-client needs the path to an application bundle.")
-        exit(1)
-    }
-    exit(PinCommands.pin(path: path) ? 0 : 1)
-}
-
-if arguments.contains("--unpin-client") {
-    exit(PinCommands.unpin() ? 0 : 1)
 }
 
 if arguments.contains("--register-agent") {

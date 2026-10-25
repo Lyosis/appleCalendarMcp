@@ -1,3 +1,4 @@
+import AppleCalendarIPC
 import Foundation
 
 /// An inbound JSON-RPC 2.0 message.
@@ -41,6 +42,12 @@ struct RPCError: Error, Sendable {
     static func internalError(_ reason: String) -> RPCError {
         RPCError(code: -32603, message: reason)
     }
+
+    /// The client is not one this helper serves. In the range JSON-RPC leaves
+    /// to implementations.
+    static func clientRefused(_ reason: String) -> RPCError {
+        RPCError(code: -32001, message: reason)
+    }
 }
 
 enum RPCResponse {
@@ -59,5 +66,28 @@ enum RPCResponse {
             payload["data"] = data
         }
         return .object(["jsonrpc": "2.0", "id": id, "error": .object(payload)])
+    }
+
+    /// The reply to any message on a refused connection: the same error for
+    /// every request, nothing for a notification — which must never be
+    /// answered — so the client reads why instead of waiting on silence.
+    static func refusal(to message: String, reason: String) -> String? {
+        guard let request = try? JSONDecoder().decode(RPCRequest.self, from: Data(message.utf8))
+        else {
+            return encode(failure(id: .null, error: .parseError()))
+        }
+        guard let id = request.id else { return nil }
+        return encode(failure(id: id, error: .clientRefused(reason)))
+    }
+
+    /// One reply, serialised as the single line the bridge writes out.
+    static func encode(_ value: JSONValue) -> String? {
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.withoutEscapingSlashes]
+        guard let data = try? encoder.encode(value) else {
+            log("dropped a reply that could not be encoded")
+            return nil
+        }
+        return String(decoding: data, as: UTF8.self)
     }
 }

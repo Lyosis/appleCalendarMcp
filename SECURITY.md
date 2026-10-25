@@ -35,30 +35,53 @@ that identifier, checked on every message. An attacker cannot write their own
 client, and cannot patch the bridge, because either breaks the signature the
 helper requires — and another program signed by the same team is refused too.
 
-**The pinned client must be an ancestor of the peer.** The bridge is a public
-binary; anyone can run it. So the helper also asks who started it, walking the
-process chain and testing each ancestor against the pinned application's
-designated requirement. Pin with:
+**The bridge must have been started by Claude Desktop — exactly.** The bridge
+is a public binary; anyone can run it. So the helper walks the processes above
+the peer and requires precisely this chain, nothing in between and nothing
+above:
 
-```sh
-apple-calendar-mcp --pin-client-auto      # run this from your MCP client
-apple-calendar-mcp --show-pin
-apple-calendar-mcp --unpin-client
+```
+bridge  <-  disclaimer  <-  Claude Desktop  <-  launchd
 ```
 
-The pin lives in the keychain, not in a file. A file under your home directory
-is writable by anything running as you, so an attacker could replace the pin
-with their own identity and walk in. A keychain item is bound to the code that
-created it.
+`disclaimer` is the helper Claude Desktop starts its MCP servers through. Each
+of the two is checked against its publisher's designated requirement — its
+signing identifier under Anthropic's team, `Q6L2SF6YDW` — so updates to Claude
+Desktop keep matching. Sessions of Claude Code inside the app are covered too:
+the app itself starts the servers declared in its configuration (measured).
 
-**Together**, these mean a local attacker has to run code inside a process tree
-belonging to your pinned client. That is a real barrier. It is not a wall.
+Exactly, because "somewhere above" was measured to be too weak: a shell started
+by a Claude Code session has Claude Desktop above it as well, so any command run
+from there — including one a model was talked into — reached the calendar.
+
+**The policy is compiled in.** Earlier versions pinned a client in the
+keychain. Any process running as you could delete that item without a prompt,
+and an empty pin accepted everyone. There is now nothing to delete and nothing
+to set: changing who is allowed means shipping another signed build. It lives
+in `Sources/AppleCalendarMCP/ClientPolicy.swift`.
+
+**Process ids are checked against start times.** The ancestors are found by
+process id, and an ancestor can have exited and its id been reused. A parent
+cannot have started after its child, so an id that reads otherwise is refused;
+the start time is read again after the signature check, so the process that
+passed is the one that was measured.
+
+**A refused client is told so.** Every request on a refused connection gets a
+JSON-RPC error (`-32001`) saying that only Claude Desktop is accepted. Which
+process was where goes to the log, not to the model:
+
+```sh
+log show --last 10m --predicate 'subsystem == "com.wilfrid.B.apple-calendar-mcp"'
+```
+
+**Together**, these mean a local attacker has to run code inside Claude
+Desktop's own process. That is a real barrier. It is not a wall.
 
 ## What is not checked
 
 **Prompt injection.** If a web page, an email or a document convinces the model
 to read or change your calendar, every check above passes: the request really
-does come from your client, through your bridge, under your pinned application.
+does come from Claude Desktop, through your bridge.
 No signature distinguishes "the model acting for you" from "the model acting on
 text it just read".
 
@@ -73,17 +96,22 @@ Two things address that, and neither is a control:
   event the occurrence addressed and how the series repeats. That does not
   prevent misuse. It makes misuse visible afterwards.
 
-**Nothing is pinned by default.** A fresh install accepts any process that runs
-the bridge, and says so on every connection in its log.
-Refusing everything until someone finds the right incantation would produce a
-puzzle rather than protection — but until you pin, the second check above is
-simply not running.
+**Only Claude Desktop.** Claude Code run from a terminal, a bridge declared in
+Claude Code's own configuration, and every other MCP client are refused.
+Supporting one means measuring the chain it starts the bridge with and adding
+it to the policy — not a setting.
 
-**Ancestors are identified by process id.** An open XPC connection keeps the
-direct peer alive, so its id cannot have been reused. Its ancestors can have
-exited, and a reused id there would be a way to spoof the chain. Closing this
-properly needs audit tokens, which the public XPC API does not expose for a
-connection's ancestors.
+**The policy rests on how Claude Desktop works today.** It was measured with
+Claude Desktop 3.6556.2. If Anthropic renames `disclaimer`, puts another
+process in the chain, or signs under another team, every connection is refused
+— loudly, with the error above, not silently. `apple-calendar-mcp --selftest`
+checks the installed Claude Desktop against the policy, so a signing change
+shows up there first.
+
+**Start times narrow process id reuse; they are not audit tokens.** The check
+runs once, when the connection opens; after that the open XPC connection pins
+the peer. Audit tokens would identify the ancestors beyond doubt, but the
+public XPC API does not expose them for a connection's ancestors.
 
 **Deletion is limited, not prevented.** `delete_event` refuses without
 `confirm: true` and removes one event per call — or one whole recurring series,
