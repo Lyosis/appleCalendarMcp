@@ -54,6 +54,17 @@ Exactly, because "somewhere above" was measured to be too weak: a shell started
 by a Claude Code session has Claude Desktop above it as well, so any command run
 from there — including one a model was talked into — reached the calendar.
 
+**`disclaimer` must have been told to run the bridge.** A process keeps its id
+and its parent when it replaces itself with another program. So any MCP server
+Claude Desktop starts could turn itself into the bridge, with its input and
+output wired to a process of its own, and sit in exactly the chain above —
+measured: it got full access, while the same server starting the bridge as a
+child was refused. What `disclaimer` was told to run is kept by the kernel and
+does not change when its child replaces itself, so the helper reads it
+(`KERN_PROCARGS2`) and requires that the program after `--` is, links
+resolved, the one the peer is running. A server declared with the bridge's own
+path gets a real bridge, wired to Claude Desktop, and nothing more.
+
 **The policy is compiled in.** Earlier versions pinned a client in the
 keychain. Any process running as you could delete that item without a prompt,
 and an empty pin accepted everyone. There is now nothing to delete and nothing
@@ -75,7 +86,9 @@ log show --last 10m --predicate 'subsystem == "com.wilfrid.B.apple-calendar-mcp"
 ```
 
 **Together**, these mean a local attacker has to run code inside Claude
-Desktop's own process. That is a real barrier. It is not a wall.
+Desktop's own process — not merely be one of the MCP servers it starts, which
+the previous version of this paragraph overlooked and a test disproved. That
+is a real barrier. It is not a wall.
 
 ## What is not checked
 
@@ -110,9 +123,10 @@ Supporting one means measuring the chain it starts the bridge with and adding
 it to the policy — not a setting.
 
 **The policy rests on how Claude Desktop works today.** It was measured with
-Claude Desktop 3.6556.2. If Anthropic renames `disclaimer`, puts another
-process in the chain, or signs under another team, every connection is refused
-— loudly, with the error above, not silently. `apple-calendar-mcp --selftest`
+Claude Desktop 3.6556.2, and again with 4.29.0. If Anthropic renames
+`disclaimer`, puts another process in the chain, signs under another team or
+starts servers other than as `disclaimer … -- <program>`, every connection is
+refused — loudly, with the error above, not silently. `apple-calendar-mcp --selftest`
 checks the installed Claude Desktop against the policy, so a signing change
 shows up there first.
 

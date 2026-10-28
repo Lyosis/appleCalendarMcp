@@ -51,6 +51,53 @@ public enum Ancestry {
         return String(decoding: buffer.prefix(Int(length)), as: UTF8.self)
     }
 
+    /// The arguments a process was started with, `argv[0]` included.
+    ///
+    /// Read from the kernel (`KERN_PROCARGS2`), not from the process: what a
+    /// launcher was told to run stays readable after the program it started
+    /// replaced itself with another. Nil when the kernel refuses — another
+    /// user's process, or one that has gone.
+    public static func arguments(of pid: pid_t) -> [String]? {
+        var mib: [Int32] = [CTL_KERN, KERN_PROCARGS2, pid]
+        var size = 0
+        guard sysctl(&mib, 3, nil, &size, nil, 0) == 0, size > MemoryLayout<Int32>.size else {
+            return nil
+        }
+        var buffer = [UInt8](repeating: 0, count: size)
+        guard sysctl(&mib, 3, &buffer, &size, nil, 0) == 0, size > MemoryLayout<Int32>.size else {
+            return nil
+        }
+
+        // Layout: argc, the executable path, padding NULs, then argc strings.
+        let count = buffer.withUnsafeBytes { $0.loadUnaligned(as: Int32.self) }
+        guard count >= 0 else { return nil }
+        var index = MemoryLayout<Int32>.size
+        func nextString() -> String? {
+            guard index < size else { return nil }
+            let start = index
+            while index < size, buffer[index] != 0 { index += 1 }
+            let text = String(decoding: buffer[start..<index], as: UTF8.self)
+            return text
+        }
+        guard nextString() != nil else { return nil }  // the executable path
+        while index < size, buffer[index] == 0 { index += 1 }
+
+        var arguments: [String] = []
+        for _ in 0..<count {
+            guard let argument = nextString() else { return nil }
+            arguments.append(argument)
+            index += 1  // past the terminating NUL
+        }
+        return arguments
+    }
+
+    /// `path` with every symbolic link resolved, or nil if it does not exist.
+    public static func resolvedPath(_ path: String) -> String? {
+        guard let resolved = realpath(path, nil) else { return nil }
+        defer { free(resolved) }
+        return String(cString: resolved)
+    }
+
     /// Whether a running process satisfies a code signing requirement.
     ///
     /// Identifying by process id carries a reuse race for ancestors, which may

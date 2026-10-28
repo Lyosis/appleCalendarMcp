@@ -14,6 +14,15 @@ import Security
 /// shell started by a Claude Code session has Claude Desktop above it too, so
 /// any command run from that shell — including one a model was talked into —
 /// got full calendar access through the bridge.
+///
+/// The chain alone is not enough either. A process keeps its id and its parent
+/// when it replaces itself with another program, so any MCP server Claude
+/// Desktop starts — `<server> <- disclaimer <- Claude Desktop` — could become
+/// the bridge, with its input and output wired to a process of its own, and
+/// pass every check above: measured on 2026-10-28, it got full access while the
+/// same server starting the bridge as a child was refused. What `disclaimer`
+/// was told to run cannot be changed that way, so it must name the program the
+/// peer is actually running.
 enum ClientPolicy {
 
     /// One process the chain must contain, above the bridge.
@@ -24,9 +33,10 @@ enum ClientPolicy {
         /// requirement (`codesign -d -r-`): its identifier and its team, so
         /// updates and certificate renewals by the same publisher still match.
         let requirement: String
-        /// Where the program is normally installed, for `--selftest` only. The
-        /// check on a connection never looks at paths.
+        /// Where the program is normally installed, for `--selftest` only.
         let installedPath: String
+        /// Whether this launcher must have been told to run the bridge itself.
+        var launchesPeer = false
     }
 
     /// The processes above the bridge, nearest first, measured on 2026-10-25
@@ -42,7 +52,8 @@ enum ClientPolicy {
                 and certificate leaf[field.1.2.840.113635.100.6.1.13] \
                 and certificate leaf[subject.OU] = Q6L2SF6YDW
                 """,
-            installedPath: "/Applications/Claude.app/Contents/Helpers/disclaimer"
+            installedPath: "/Applications/Claude.app/Contents/Helpers/disclaimer",
+            launchesPeer: true
         ),
         Step(
             name: "Claude Desktop",
@@ -90,6 +101,15 @@ enum ClientPolicy {
             guard system.satisfies(parent, step) else {
                 return .refused("process \(parent) is not \(step.name)")
             }
+            if step.launchesPeer {
+                guard let launched = launchedProgram(arguments: system.arguments(of: parent))
+                        .flatMap(system.resolvedPath),
+                      let running = system.executablePath(of: peer),
+                      launched == running
+                else {
+                    return .refused("\(step.name) (\(parent)) was not started to run the bridge")
+                }
+            }
             guard system.startTime(of: parent) == started else {
                 return .refused("process \(parent) changed while being checked")
             }
@@ -101,6 +121,19 @@ enum ClientPolicy {
             return .refused("\(steps.last?.name ?? "the client") was not started by launchd")
         }
         return .allowed
+    }
+
+    /// The program a launcher was told to run: the first argument after `--`,
+    /// as measured — `disclaimer --pgroup -- <program>`. Nil when there is no
+    /// such argument, which refuses: a change of format must fail closed.
+    static func launchedProgram(arguments: [String]?) -> String? {
+        guard let arguments,
+              let separator = arguments.dropFirst().firstIndex(of: "--"),
+              separator + 1 < arguments.endIndex
+        else {
+            return nil
+        }
+        return arguments[separator + 1]
     }
 
     /// The step's requirement, compiled. Nil only if the text above is wrong,

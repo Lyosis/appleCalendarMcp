@@ -8,6 +8,10 @@ final class FakeProcesses: ProcessInspector {
         let parent: pid_t
         let started: UInt64
         let name: String
+        /// What the process was started with, as the kernel reports it.
+        var arguments: [String]? = nil
+        /// What it is running now.
+        var executable: String? = nil
     }
 
     var table: [pid_t: Process]
@@ -34,5 +38,20 @@ final class FakeProcesses: ProcessInspector {
 
     func satisfies(_ pid: pid_t, _ step: ClientPolicy.Step) -> Bool {
         table[pid]?.name == step.name
+    }
+
+    func arguments(of pid: pid_t) -> [String]? {
+        table[pid]?.arguments
+    }
+
+    func executablePath(of pid: pid_t) -> String? {
+        table[pid]?.executable
+    }
+
+    /// Paths resolve to themselves, except the links listed here.
+    var links: [String: String] = [:]
+
+    func resolvedPath(_ path: String) -> String? {
+        links[path] ?? path
     }
 }
