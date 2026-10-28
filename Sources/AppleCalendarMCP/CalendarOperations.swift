@@ -160,13 +160,26 @@ extension CalendarAccess {
         return EventInfo(event)
     }
 
+    /// What an update changed, for the journal.
+    struct Update: Sendable {
+        let before: EventInfo
+        let after: EventInfo
+        /// The series an occurrence was split off from, as it stands now: a
+        /// "this and future" change cuts it short, and its new end is written
+        /// nowhere else.
+        let remainingSeries: EventInfo?
+    }
+
+    /// Changes an event. Returns it as it was and as it is, so the journal can
+    /// say what to put back — the state after alone cannot.
     func update(
         id: String, occurrenceStart: Date?, scope: RecurrenceScope, draft: EventDraft
-    ) throws -> EventInfo {
+    ) throws -> Update {
         let (event, span) = try target(id: id, occurrenceStart: occurrenceStart, scope: scope)
         guard event.calendar?.allowsContentModifications == true else {
             throw CalendarError.readOnlyCalendar(event.calendar?.title ?? "unknown")
         }
+        let before = EventInfo(event)
 
         if let title = draft.title { event.title = title }
         if let start = draft.start { event.startDate = start }
@@ -185,23 +198,74 @@ extension CalendarAccess {
         } catch {
             throw CalendarError.saveFailed(error.localizedDescription)
         }
-        return EventInfo(event)
+        let after = EventInfo(event)
+
+        // Measured on 2026-10-28: changing an occurrence "and the later ones"
+        // in the middle of a series starts a new series under a new identifier,
+        // and the original now ends before it.
+        var remainingSeries: EventInfo?
+        if scope == .futureEvents, after.id != before.id,
+           let original = store.event(withIdentifier: before.id) {
+            remainingSeries = EventInfo(original)
+        }
+        return Update(before: before, after: after, remainingSeries: remainingSeries)
     }
 
-    /// Removes one event, or one series. Returns what was removed, so the
-    /// caller can record it.
-    func delete(id: String, occurrenceStart: Date?, scope: RecurrenceScope) throws -> EventInfo {
+    /// What a deletion removed, for the journal.
+    struct Deletion: Sendable {
+        /// The event the caller addressed.
+        let target: EventInfo
+        /// Everything that went, one entry per identifier.
+        let removed: [JournalSnapshot]
+        /// The range compared before and after, when the deletion reached
+        /// beyond one occurrence; nil when only the target could go.
+        let scanned: DateInterval?
+    }
+
+    /// How far ahead a series deletion is compared. Parts that begin later are
+    /// removed too but not listed, and the journal says up to where it looked.
+    static let deletionScanAhead: TimeInterval = 5 * 366 * 24 * 3600
+
+    /// Removes one event, or one series, and reports everything that went.
+    func delete(id: String, occurrenceStart: Date?, scope: RecurrenceScope) throws -> Deletion {
         let (event, span) = try target(id: id, occurrenceStart: occurrenceStart, scope: scope)
-        guard event.calendar?.allowsContentModifications == true else {
+        guard let calendar = event.calendar, calendar.allowsContentModifications else {
             throw CalendarError.readOnlyCalendar(event.calendar?.title ?? "unknown")
         }
-        let removed = EventInfo(event)
+        let target = EventInfo(event)
+
+        // A single occurrence, or a single event, is all that can go.
+        guard span == .futureEvents else {
+            try remove(event, span: span)
+            return Deletion(target: target, removed: [JournalSnapshot(target)], scanned: nil)
+        }
+
+        // Beyond one occurrence EventKit also removes what it split off the
+        // series earlier, under other identifiers. Look at the calendar before
+        // and after rather than predict it.
+        let scanned = DateInterval(
+            start: target.start,
+            end: max(target.start, .now).addingTimeInterval(Self.deletionScanAhead))
+        let ids = [calendar.calendarIdentifier]
+        let before = try events(from: scanned.start, to: scanned.end, calendarIDs: ids)
+        try remove(event, span: span)
+        let after = try events(from: scanned.start, to: scanned.end, calendarIDs: ids)
+
+        let removed = JournalSnapshot.removed(
+            before: before.map(JournalSnapshot.init), after: after.map(JournalSnapshot.init))
+        return Deletion(
+            target: target,
+            // Never record less than the target, even if the comparison saw nothing.
+            removed: removed.isEmpty ? [JournalSnapshot(target)] : removed,
+            scanned: scanned)
+    }
+
+    private func remove(_ event: EKEvent, span: EKSpan) throws {
         do {
             try store.remove(event, span: span, commit: true)
         } catch {
             throw CalendarError.saveFailed(error.localizedDescription)
         }
-        return removed
     }
 
     // MARK: - Lookup
