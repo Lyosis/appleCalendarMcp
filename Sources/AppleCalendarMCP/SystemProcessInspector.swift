@@ -15,4 +15,16 @@ struct SystemProcessInspector: ProcessInspector {
         guard let requirement = ClientPolicy.compiled(step) else { return false }
         return Ancestry.satisfies(pid: pid, requirement: requirement)
     }
+
+    func arguments(of pid: pid_t) -> [String]? {
+        Ancestry.arguments(of: pid)
+    }
+
+    func executablePath(of pid: pid_t) -> String? {
+        Ancestry.path(of: pid).flatMap(Ancestry.resolvedPath)
+    }
+
+    func resolvedPath(_ path: String) -> String? {
+        Ancestry.resolvedPath(path)
+    }
 }

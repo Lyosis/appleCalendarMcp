@@ -10,4 +10,10 @@ protocol ProcessInspector {
     /// Microseconds since 1970, or nil once the process has gone.
     func startTime(of pid: pid_t) -> UInt64?
     func satisfies(_ pid: pid_t, _ step: ClientPolicy.Step) -> Bool
+    /// The arguments the process was started with, `argv[0]` included.
+    func arguments(of pid: pid_t) -> [String]?
+    /// The program the process is running now, symbolic links resolved.
+    func executablePath(of pid: pid_t) -> String?
+    /// `path` with symbolic links resolved, or nil if it does not exist.
+    func resolvedPath(_ path: String) -> String?
 }

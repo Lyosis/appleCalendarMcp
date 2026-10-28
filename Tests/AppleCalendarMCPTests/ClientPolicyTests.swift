@@ -7,13 +7,70 @@ import Testing
 struct ClientPolicyTests {
     typealias P = FakeProcesses.Process
 
-    /// The measured chain: Claude (100), its disclaimer (200), the bridge (300).
+    private static let bridge = "/Users/me/Applications/AppleCalendarMCP.app/Contents/MacOS/apple-calendar-mcp-bridge"
+    private static let disclaimer = "/Applications/Claude.app/Contents/Helpers/disclaimer"
+
+    /// The measured chain: Claude (100), its disclaimer (200), the bridge (300),
+    /// with disclaimer's arguments as measured on 2026-10-28.
     private func claudeDesktop() -> FakeProcesses {
         FakeProcesses([
             100: P(parent: 1, started: 1_000, name: "Claude Desktop"),
-            200: P(parent: 100, started: 2_000, name: "disclaimer"),
-            300: P(parent: 200, started: 3_000, name: "bridge"),
+            200: P(parent: 100, started: 2_000, name: "disclaimer",
+                   arguments: [Self.disclaimer, "--pgroup", "--", Self.bridge]),
+            300: P(parent: 200, started: 3_000, name: "bridge", executable: Self.bridge),
         ])
+    }
+
+    /// The bypass measured on 2026-10-28: another MCP server, started by
+    /// disclaimer, replaced itself with the bridge. Same pid, same parent.
+    @Test("An MCP server that turned itself into the bridge is refused")
+    func execBypass() {
+        let processes = claudeDesktop()
+        processes.table[200] = P(parent: 100, started: 2_000, name: "disclaimer",
+                                 arguments: [Self.disclaimer, "--pgroup", "--", "/bin/bash", "poc.sh", "exec"])
+        #expect(ClientPolicy.evaluate(peer: 300, using: processes) != .allowed)
+    }
+
+    @Test("Naming the bridge as an argument of another program is not enough")
+    func bridgeAsArgument() {
+        let processes = claudeDesktop()
+        processes.table[200] = P(parent: 100, started: 2_000, name: "disclaimer",
+                                 arguments: [Self.disclaimer, "--pgroup", "--", "/bin/bash", Self.bridge])
+        #expect(ClientPolicy.evaluate(peer: 300, using: processes) != .allowed)
+    }
+
+    @Test("A link named like the bridge but leading elsewhere is refused")
+    func disguisedLink() {
+        let processes = claudeDesktop()
+        let fake = "/tmp/x/AppleCalendarMCP.app/Contents/MacOS/apple-calendar-mcp-bridge"
+        processes.table[200] = P(parent: 100, started: 2_000, name: "disclaimer",
+                                 arguments: [Self.disclaimer, "--pgroup", "--", fake])
+        processes.links[fake] = "/tmp/x/evil"
+        #expect(ClientPolicy.evaluate(peer: 300, using: processes) != .allowed)
+    }
+
+    @Test("A link that does lead to the bridge is accepted")
+    func honestLink() {
+        let processes = claudeDesktop()
+        let link = "/Users/me/bin/calendar-bridge"
+        processes.table[200] = P(parent: 100, started: 2_000, name: "disclaimer",
+                                 arguments: [Self.disclaimer, "--pgroup", "--", link])
+        processes.links[link] = Self.bridge
+        #expect(ClientPolicy.evaluate(peer: 300, using: processes) == .allowed)
+    }
+
+    @Test("Unreadable or unfamiliar launcher arguments fail closed", arguments: [
+        nil,
+        [String](),
+        ["/Applications/Claude.app/Contents/Helpers/disclaimer"],
+        ["/Applications/Claude.app/Contents/Helpers/disclaimer", "--pgroup", "--"],
+        ["/Applications/Claude.app/Contents/Helpers/disclaimer",
+         "/Users/me/Applications/AppleCalendarMCP.app/Contents/MacOS/apple-calendar-mcp-bridge"],
+    ] as [[String]?])
+    func unfamiliarArguments(_ arguments: [String]?) {
+        let processes = claudeDesktop()
+        processes.table[200] = P(parent: 100, started: 2_000, name: "disclaimer", arguments: arguments)
+        #expect(ClientPolicy.evaluate(peer: 300, using: processes) != .allowed)
     }
 
     @Test("The measured Claude Desktop chain is allowed")
