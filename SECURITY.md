@@ -91,10 +91,18 @@ Two things address that, and neither is a control:
   content written by other people, with an explicit instruction not to act on
   them. Free-text fields are withheld unless a caller passes `includeDetails`.
 - Every create, update and delete is appended to
-  `~/Library/Logs/apple-calendar-mcp-writes.log`, with a timestamp, the
-  calendar, the event's identifier and title, the span, and for a recurring
-  event the occurrence addressed and how the series repeats. That does not
-  prevent misuse. It makes misuse visible afterwards.
+  `~/Library/Logs/apple-calendar-mcp-writes.log`, with a timestamp, the span,
+  and for each event its identifier, title, times, calendar and how it
+  repeats. An update records the event as it was and as it is, so a change
+  can be put back by hand, and when it splits a series, the part left behind
+  with its new end; location, notes and url are not logged, only named when
+  they change. A deletion lists everything that went: deleting a series
+  also removes the parts EventKit split off it earlier, under other
+  identifiers, so the helper compares the calendar before and after rather
+  than record only the event addressed. That comparison covers five years
+  ahead, and the line says so; a part starting later goes unlisted, and
+  anything iCloud removes in the same instant would be listed too. None of
+  this prevents misuse. It makes misuse visible afterwards.
 
 **Only Claude Desktop.** Claude Code run from a terminal, a bridge declared in
 Claude Code's own configuration, and every other MCP client are refused.

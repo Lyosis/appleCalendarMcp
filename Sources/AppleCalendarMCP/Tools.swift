@@ -150,7 +150,9 @@ extension Server {
                     """
                     Delete one event — or, for a recurring event, one occurrence, it and \
                     the later ones, or the whole series, as span says. Requires confirm: \
-                    true, and every deletion is written to the change journal.
+                    true, and every deletion is written to the change journal. Deleting \
+                    a series also removes occurrences edited on their own and series \
+                    split off from it; eventsRemoved says how many events went.
                     """,
                     properties: [
                         "id": schema("string", "Identifier from list_events or search_events."),
@@ -312,7 +314,7 @@ extension Server {
         draft.alarmMinutesBefore = arguments["alarmMinutesBefore"]?.intValue
 
         let event = try await calendar.create(draft)
-        await journal.record(action: "create", event: event, scope: .thisEvent, occurrenceStart: nil)
+        await journal.recordCreation(event)
 
         return toolResult(
             JSONValue.object([
@@ -337,10 +339,10 @@ extension Server {
         draft.url = arguments["url"]?.stringValue
         draft.calendarID = arguments["calendarId"]?.stringValue
 
-        let event = try await calendar.update(
+        let update = try await calendar.update(
             id: id, occurrenceStart: occurrenceStart, scope: scope, draft: draft)
-        await journal.record(
-            action: "update", event: event, scope: scope, occurrenceStart: occurrenceStart)
+        await journal.recordUpdate(update, scope: scope, occurrenceStart: occurrenceStart)
+        let event = update.after
 
         return toolResult(
             JSONValue.object([
@@ -358,14 +360,16 @@ extension Server {
         let occurrenceStart = try optionalDate(arguments, "occurrenceStart")
         let scope = try RecurrenceScope(argument: arguments["span"]?.stringValue)
 
-        let removed = try await calendar.delete(
+        let deletion = try await calendar.delete(
             id: id, occurrenceStart: occurrenceStart, scope: scope)
-        await journal.record(
-            action: "delete", event: removed, scope: scope, occurrenceStart: occurrenceStart)
+        await journal.recordDeletion(deletion, scope: scope, occurrenceStart: occurrenceStart)
 
         return toolResult(
             JSONValue.object([
-                "deleted": removed.json(includeDetails: false),
+                "deleted": deletion.target.json(includeDetails: false),
+                // A series takes the parts split off it with it; say how many
+                // went, so "deleted one event" is never read into it.
+                "eventsRemoved": .int(deletion.removed.count),
                 "changeJournal": .string(journal.path),
             ]).prettyPrinted())
     }

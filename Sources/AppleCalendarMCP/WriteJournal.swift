@@ -21,32 +21,87 @@ actor WriteJournal {
             .appending(path: "Library/Logs/apple-calendar-mcp-writes.log").path(percentEncoded: false)
     }
 
-    func record(
-        action: String, event: EventInfo, scope: RecurrenceScope, occurrenceStart: Date?
+    func recordCreation(_ event: EventInfo) {
+        write([
+            "action": "create",
+            "after": JournalSnapshot(event).json,
+        ])
+    }
+
+    /// The event as it was and as it is: the state after alone cannot say what
+    /// to put back, and an occurrence edited on its own has already lost its
+    /// series by then. Fields that are not logged are named when they change.
+    func recordUpdate(
+        _ update: CalendarAccess.Update, scope: RecurrenceScope, occurrenceStart: Date?
     ) {
+        let (before, after) = (update.before, update.after)
         var fields: [String: JSONValue] = [
-            "at": .string(Timestamp.string(from: .now)),
-            "action": .string(action),
+            "action": "update",
             "span": .string(scope.rawValue),
-            "eventId": .string(event.id),
-            "title": .string(event.title),
-            "start": .string(Timestamp.string(from: event.start)),
-            "end": .string(Timestamp.string(from: event.end)),
-            "calendar": .string(event.calendarTitle),
+            "before": JournalSnapshot(before).json,
+            "after": JournalSnapshot(after).json,
+            "changedFields": .array(Self.changedFields(before: before, after: after).map { .string($0) }),
         ]
-        // Which occurrence was addressed, and how the series repeats: without
-        // them, a line saying "deleted" cannot tell one Monday from every one.
         if let occurrenceStart {
             fields["occurrenceStart"] = .string(Timestamp.string(from: occurrenceStart))
         }
-        if let recurrence = event.recurrence {
-            fields["recurrence"] = .string(recurrence)
+        if let remaining = update.remainingSeries {
+            // The part left behind by a split, with its new end.
+            fields["remainingSeries"] = JournalSnapshot(remaining).json
         }
-        let entry = JSONValue.object(fields)
+        write(fields)
+    }
+
+    /// Everything a deletion removed, not only the event addressed: deleting a
+    /// series also takes the parts EventKit split off it.
+    func recordDeletion(
+        _ deletion: CalendarAccess.Deletion, scope: RecurrenceScope, occurrenceStart: Date?
+    ) {
+        var fields: [String: JSONValue] = [
+            "action": "delete",
+            "span": .string(scope.rawValue),
+            "target": JournalSnapshot(deletion.target).json,
+            "removed": .array(deletion.removed.map(\.json)),
+        ]
+        if let occurrenceStart {
+            fields["occurrenceStart"] = .string(Timestamp.string(from: occurrenceStart))
+        }
+        if let scanned = deletion.scanned {
+            // Parts beginning after this were removed too, but not listed.
+            fields["scanned"] = .object([
+                "from": .string(Timestamp.string(from: scanned.start)),
+                "to": .string(Timestamp.string(from: scanned.end)),
+            ])
+        }
+        write(fields)
+    }
+
+    /// The names of the fields that differ — values only for those the
+    /// snapshot already carries, so notes, location and url stay out of the log.
+    static func changedFields(before: EventInfo, after: EventInfo) -> [String] {
+        var names: [String] = []
+        if before.title != after.title { names.append("title") }
+        if before.start != after.start { names.append("start") }
+        if before.end != after.end { names.append("end") }
+        if before.isAllDay != after.isAllDay { names.append("isAllDay") }
+        if before.calendarID != after.calendarID { names.append("calendar") }
+        if before.location != after.location { names.append("location") }
+        if before.notes != after.notes { names.append("notes") }
+        if before.url != after.url { names.append("url") }
+        if before.recurrence != after.recurrence { names.append("recurrence") }
+        return names
+    }
+
+    private func write(_ fields: [String: JSONValue]) {
+        var entry = fields
+        entry["at"] = .string(Timestamp.string(from: .now))
 
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.sortedKeys, .withoutEscapingSlashes]
-        guard let data = try? encoder.encode(entry) else { return }
+        guard let data = try? encoder.encode(JSONValue.object(entry)) else {
+            log("dropped a journal entry that could not be encoded")
+            return
+        }
         append(data)
     }
 
