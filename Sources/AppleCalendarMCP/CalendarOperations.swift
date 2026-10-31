@@ -10,9 +10,15 @@ struct EventDraft: Sendable {
     var isAllDay: Bool?
     var location: String?
     var notes: String?
-    var url: String?
+    var url: Link?
     var calendarID: String?
     var alarmMinutesBefore: Int?
+
+    /// A link already checked by `EventLink`, so nothing here parses text.
+    enum Link: Sendable, Equatable {
+        case remove
+        case set(URL)
+    }
 }
 
 extension CalendarAccess {
@@ -143,7 +149,7 @@ extension CalendarAccess {
         event.isAllDay = draft.isAllDay ?? false
         event.location = draft.location
         event.notes = draft.notes
-        if let url = draft.url { event.url = URL(string: url) }
+        if case .set(let url) = draft.url { event.url = url }
         if let minutes = draft.alarmMinutesBefore {
             event.addAlarm(EKAlarm(relativeOffset: -Double(minutes) * 60))
         }
@@ -184,7 +190,11 @@ extension CalendarAccess {
         if let isAllDay = draft.isAllDay { event.isAllDay = isAllDay }
         if let location = draft.location { event.location = location }
         if let notes = draft.notes { event.notes = notes }
-        if let url = draft.url { event.url = URL(string: url) }
+        switch draft.url {
+        case .remove: event.url = nil
+        case .set(let url): event.url = url
+        case nil: break
+        }
         if let calendarID = draft.calendarID {
             event.calendar = try writableCalendar(calendarID)
         }

@@ -106,7 +106,7 @@ extension Server {
                         "isAllDay": schema("boolean", "Whether it occupies whole days."),
                         "location": schema("string", "Where it happens."),
                         "notes": schema("string", "Free text attached to the event."),
-                        "url": schema("string", "A link to attach."),
+                        "url": schema("string", "A link to attach: http, https or mailto only."),
                         "alarmMinutesBefore": schema("integer", "Add an alert this many minutes beforehand."),
                     ],
                     required: ["title", "start", "end"]),
@@ -140,7 +140,7 @@ extension Server {
                         "isAllDay": schema("boolean", "Whether it occupies whole days."),
                         "location": schema("string", "New location."),
                         "notes": schema("string", "New notes, replacing what was there."),
-                        "url": schema("string", "New link."),
+                        "url": schema("string", "New link: http, https or mailto only. \"\" removes it."),
                         "calendarId": schema("string", "Move the event to this calendar."),
                     ],
                     required: ["id"]),
@@ -322,7 +322,7 @@ extension Server {
         draft.isAllDay = arguments["isAllDay"]?.boolValue
         draft.location = arguments["location"]?.stringValue
         draft.notes = arguments["notes"]?.stringValue
-        draft.url = arguments["url"]?.stringValue
+        draft.url = try arguments["url"]?.stringValue.map(EventLink.change(from:))
         draft.alarmMinutesBefore = arguments["alarmMinutesBefore"]?.intValue
 
         try await ensureJournal()
@@ -347,7 +347,7 @@ extension Server {
         draft.isAllDay = arguments["isAllDay"]?.boolValue
         draft.location = arguments["location"]?.stringValue
         draft.notes = arguments["notes"]?.stringValue
-        draft.url = arguments["url"]?.stringValue
+        draft.url = try arguments["url"]?.stringValue.map(EventLink.change(from:))
         draft.calendarID = arguments["calendarId"]?.stringValue
 
         try await ensureJournal()

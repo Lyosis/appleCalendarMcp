@@ -111,6 +111,7 @@ enum CalendarError: LocalizedError {
     case seriesWithOccurrence
     case seriesTimeChange(seriesStart: String)
     case notConfirmed
+    case badLink
     case saveFailed(String)
 
     var errorDescription: String? {
@@ -161,6 +162,13 @@ enum CalendarError: LocalizedError {
             """
         case .notConfirmed:
             "Deleting an event requires confirm: true. Nothing was removed."
+        case .badLink:
+            """
+            url must be an http, https or mailto link, such as \
+            https://example.com/meeting, or "" to remove the link. Other schemes \
+            are refused: a link in someone's calendar should not run an app when \
+            clicked. Nothing was changed.
+            """
         case .saveFailed(let reason):
             "The Calendar database refused the change: \(reason)"
         }
