@@ -114,8 +114,11 @@ Two things address that, and neither is a control:
   identifiers, so the helper compares the calendar before and after rather
   than record only the event addressed. That comparison covers five years
   ahead, and the line says so; a part starting later goes unlisted, and
-  anything iCloud removes in the same instant would be listed too. None of
-  this prevents misuse. It makes misuse visible afterwards.
+  anything iCloud removes in the same instant would be listed too. A change
+  is refused when the journal cannot be opened for writing. If appending
+  fails after the change was made — a disk filling up in between — the change
+  stands and the tool's result says it went unrecorded. None of this prevents
+  misuse. It makes misuse visible afterwards.
 
 **Only Claude Desktop.** Claude Code run from a terminal, a bridge declared in
 Claude Code's own configuration, and every other MCP client are refused.

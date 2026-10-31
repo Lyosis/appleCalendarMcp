@@ -149,7 +149,8 @@ extension Server {
                     """
                     Delete one event — or, for a recurring event, one occurrence, it and \
                     the later ones, or the whole series, as span says. Requires confirm: \
-                    true, and every deletion is written to the change journal. Deleting \
+                    true. Every deletion is written to the change journal, and none \
+                    is made when the journal cannot be written. Deleting \
                     a series also removes occurrences edited on their own and series \
                     split off from it; eventsRemoved says how many events went.
                     """,
@@ -324,14 +325,13 @@ extension Server {
         draft.url = arguments["url"]?.stringValue
         draft.alarmMinutesBefore = arguments["alarmMinutesBefore"]?.intValue
 
+        try await ensureJournal()
         let event = try await calendar.create(draft)
-        await journal.recordCreation(event)
+        let journalFailure = await journalled { try await journal.recordCreation(event) }
 
-        return toolResult(
-            JSONValue.object([
-                "created": event.json(includeDetails: true),
-                "changeJournal": .string(journal.path),
-            ]).prettyPrinted())
+        return writeResult([
+            "created": event.json(includeDetails: true),
+        ], journalFailure: journalFailure)
     }
 
     private func updateEvent(_ arguments: JSONValue) async throws -> JSONValue {
@@ -350,16 +350,16 @@ extension Server {
         draft.url = arguments["url"]?.stringValue
         draft.calendarID = arguments["calendarId"]?.stringValue
 
+        try await ensureJournal()
         let update = try await calendar.update(
             id: id, occurrenceStart: occurrenceStart, scope: scope, draft: draft)
-        await journal.recordUpdate(update, scope: scope, occurrenceStart: occurrenceStart)
-        let event = update.after
+        let journalFailure = await journalled {
+            try await journal.recordUpdate(update, scope: scope, occurrenceStart: occurrenceStart)
+        }
 
-        return toolResult(
-            JSONValue.object([
-                "updated": event.json(includeDetails: true),
-                "changeJournal": .string(journal.path),
-            ]).prettyPrinted())
+        return writeResult([
+            "updated": update.after.json(includeDetails: true),
+        ], journalFailure: journalFailure)
     }
 
     private func deleteEvent(_ arguments: JSONValue) async throws -> JSONValue {
@@ -371,18 +371,59 @@ extension Server {
         let occurrenceStart = try optionalDate(arguments, "occurrenceStart")
         let scope = try RecurrenceScope(argument: arguments["span"]?.stringValue)
 
+        try await ensureJournal()
         let deletion = try await calendar.delete(
             id: id, occurrenceStart: occurrenceStart, scope: scope)
-        await journal.recordDeletion(deletion, scope: scope, occurrenceStart: occurrenceStart)
+        let journalFailure = await journalled {
+            try await journal.recordDeletion(deletion, scope: scope, occurrenceStart: occurrenceStart)
+        }
 
-        return toolResult(
-            JSONValue.object([
-                "deleted": deletion.target.json(includeDetails: false),
-                // A series takes the parts split off it with it; say how many
-                // went, so "deleted one event" is never read into it.
-                "eventsRemoved": .int(deletion.removed.count),
-                "changeJournal": .string(journal.path),
-            ]).prettyPrinted())
+        return writeResult([
+            "deleted": deletion.target.json(includeDetails: false),
+            // A series takes the parts split off it with it; say how many
+            // went, so "deleted one event" is never read into it.
+            "eventsRemoved": .int(deletion.removed.count),
+        ], journalFailure: journalFailure)
+    }
+
+    // MARK: - Journal
+
+    /// Refuses a change the journal could not record. Called after the
+    /// arguments are checked and before anything changes.
+    private func ensureJournal() async throws {
+        do {
+            try await journal.checkWritable()
+        } catch {
+            throw ToolFailure("""
+                The change journal cannot be written (\(error.localizedDescription)), \
+                so nothing was changed. Tell the person: every change is recorded \
+                there, and none is made without it.
+                """)
+        }
+    }
+
+    /// Records a change already made. A failure is returned, never thrown: the
+    /// change stands, and an error would invite a retry that makes it twice.
+    private func journalled(_ record: () async throws -> Void) async -> String? {
+        do {
+            try await record()
+            return nil
+        } catch {
+            return """
+                The change was made, but it could not be recorded in the change \
+                journal (\(error.localizedDescription)). Tell the person, and do \
+                not repeat the change.
+                """
+        }
+    }
+
+    private func writeResult(_ fields: [String: JSONValue], journalFailure: String?) -> JSONValue {
+        var fields = fields
+        fields["changeJournal"] = .string(journal.path)
+        if let journalFailure {
+            fields["journalFailure"] = .string(journalFailure)
+        }
+        return toolResult(JSONValue.object(fields).prettyPrinted())
     }
 
     // MARK: - Shaping
