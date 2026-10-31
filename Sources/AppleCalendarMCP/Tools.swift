@@ -204,41 +204,49 @@ extension Server {
     // MARK: - Access
 
     private func checkAccess() async -> JSONValue {
-        let state = CalendarPermission.current()
-        let explanation = state.canRead ? state.adviceForClient : await adviceWhenUnreadable(state)
+        let access = await confirmAccess()
 
         return toolResult(
             JSONValue.object([
-                "status": .string(state.rawValue),
-                "canReadEvents": .bool(state.canRead),
-                "explanation": .string(explanation),
+                "status": .string(access.state?.rawValue ?? "unconfirmed"),
+                "canReadEvents": .bool(access.refusal == nil),
+                "explanation": .string(access.refusal ?? access.state?.adviceForClient ?? ""),
                 "changeJournal": .string(journal.path),
             ]).prettyPrinted(),
-            isError: !state.canRead
+            isError: access.refusal != nil
         )
     }
 
     /// EventKit has no read-only level: reading anything needs full access.
     /// Never asks for it — see `AccessState.adviceForClient`.
     private func ensureAccess() async throws {
-        let state = CalendarPermission.current()
-        guard state.canRead else {
-            throw ToolFailure(await adviceWhenUnreadable(state))
+        if let refusal = await confirmAccess().refusal {
+            throw ToolFailure(refusal)
         }
     }
 
-    /// This process cannot read, but may simply be older than the grant: a
-    /// new one tells. See `FreshAccessState`.
-    private func adviceWhenUnreadable(_ state: AccessState) async -> String {
+    /// The permission as a new process sees it, and why this call may not
+    /// touch the calendar, if it may not. This process's own reading is frozen
+    /// at whatever it saw first — see `FreshAccessState`.
+    ///
+    /// Checked as each call starts: a grant withdrawn while a call is already
+    /// past this point does not stop that call.
+    private func confirmAccess() async -> (state: AccessState?, refusal: String?) {
         let fresh = await FreshAccessState.read()
-        switch FreshAccessState.decide(inProcess: state, fresh: fresh, uptime: AgentRestart.uptime) {
-        case .unchanged:
-            return "\(state.adviceForClient) Run `apple-calendar-mcp --selftest` to see the details."
+        switch FreshAccessState.decide(
+            inProcess: CalendarPermission.current(), fresh: fresh, uptime: AgentRestart.uptime)
+        {
+        case .proceed:
+            return (fresh, nil)
+        case .refuse(let state):
+            return (state, "\(state.adviceForClient) Run `apple-calendar-mcp --selftest` to see the details.")
+        case .unconfirmed:
+            return (nil, AccessState.unconfirmed)
         case .restart:
             AgentRestart.request()
-            return AccessState.grantedSinceStart
+            return (fresh, AccessState.grantedSinceStart)
         case .disagreement:
-            return AccessState.disagreement
+            return (fresh, AccessState.disagreement)
         }
     }
 
