@@ -109,6 +109,7 @@ enum CalendarError: LocalizedError {
     case occurrenceRequired(String)
     case notRecurring(String)
     case seriesWithOccurrence
+    case seriesTimeChange(seriesStart: String)
     case notConfirmed
     case saveFailed(String)
 
@@ -150,6 +151,14 @@ enum CalendarError: LocalizedError {
             "Event \(id) does not repeat, so span \"series\" does not apply. Use \"thisEvent\"."
         case .seriesWithOccurrence:
             "span \"series\" addresses the whole series: leave occurrenceStart out."
+        case .seriesTimeChange(let seriesStart):
+            """
+            span "series" does not take start or end: it would not say which occurrence \
+            moves where, and earlier occurrences could vanish. The series begins at \
+            \(seriesStart). To move every occurrence, pass span "futureEvents" with \
+            occurrenceStart \(seriesStart), and the new start and end of that first \
+            occurrence. Nothing was changed.
+            """
         case .notConfirmed:
             "Deleting an event requires confirm: true. Nothing was removed."
         case .saveFailed(let reason):

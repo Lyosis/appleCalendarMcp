@@ -176,6 +176,7 @@ extension CalendarAccess {
             throw CalendarError.readOnlyCalendar(event.calendar?.title ?? "unknown")
         }
         let before = EventInfo(event)
+        try Self.checkSeriesChange(draft, scope: scope, seriesStart: before.start)
 
         if let title = draft.title { event.title = title }
         if let start = draft.start { event.startDate = start }
@@ -205,6 +206,19 @@ extension CalendarAccess {
             remainingSeries = EventInfo(original)
         }
         return Update(before: before, after: after, remainingSeries: remainingSeries)
+    }
+
+    /// Refuses a new start or end for a whole series, before anything changes.
+    ///
+    /// The series is its first occurrence, so an absolute start lands there.
+    /// Measured on 2026-10-31: a daily series from 5 to 10 November, given
+    /// 8 November 14:00 with span "series", kept 8 to 10 November at 14:00 —
+    /// 5 to 7 November were gone, and the tool reported success. A caller
+    /// moving a series means "every occurrence at the new time", which no
+    /// single date says; naming the first occurrence with "futureEvents" does.
+    static func checkSeriesChange(_ draft: EventDraft, scope: RecurrenceScope, seriesStart: Date) throws {
+        guard scope == .series, draft.start != nil || draft.end != nil else { return }
+        throw CalendarError.seriesTimeChange(seriesStart: Timestamp.string(from: seriesStart))
     }
 
     /// What a deletion removed, for the journal.

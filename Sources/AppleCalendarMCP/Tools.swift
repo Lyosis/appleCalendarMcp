@@ -136,8 +136,9 @@ extension Server {
                             """
                             "thisEvent" changes only that occurrence, "futureEvents" changes \
                             it and every later one, "series" changes every occurrence and \
-                            takes no occurrenceStart. Defaults to thisEvent; any other value \
-                            is refused.
+                            takes no occurrenceStart, start or end — to move a whole series, \
+                            use futureEvents from its first occurrence. Defaults to thisEvent; \
+                            any other value is refused.
                             """),
                         "title": schema("string", "New title."),
                         "start": schema("string", "New start, ISO 8601."),
