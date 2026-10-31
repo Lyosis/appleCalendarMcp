@@ -98,11 +98,15 @@ does come from Claude Desktop, through your bridge.
 No signature distinguishes "the model acting for you" from "the model acting on
 text it just read".
 
-Two things address that, and neither is a control:
+Three things address that. Only the second is a control, and a narrow one:
 
 - Event titles, locations, notes and attendee names are returned marked as
   content written by other people, with an explicit instruction not to act on
   them. Free-text fields are withheld unless a caller passes `includeDetails`.
+- A link written to an event must be http, https or mailto. Any other scheme
+  is refused, so an injected instruction cannot leave behind a link that runs
+  an app — a shortcut, a script — when you click it in Calendar. It can still
+  leave an ordinary web link.
 - Every create, update and delete is appended to
   `~/Library/Logs/apple-calendar-mcp-writes.log`, with a timestamp, the span,
   and for each event its identifier, title, times, calendar and how it
