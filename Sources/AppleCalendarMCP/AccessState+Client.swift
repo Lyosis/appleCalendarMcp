@@ -26,6 +26,13 @@ extension AccessState {
         to pick it up: call the tool again.
         """
 
+    /// The child that checks the permission gave no answer. See
+    /// `FreshAccessState.Outcome.unconfirmed`.
+    static let unconfirmed = """
+        Calendar access could not be confirmed, so this call was refused. Run \
+        `apple-calendar-mcp --selftest` and include its output in a bug report.
+        """
+
     /// A server that started after the grant still cannot read, while a new
     /// process can: the two are not attributed to the same app.
     static let disagreement = """

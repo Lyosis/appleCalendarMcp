@@ -26,7 +26,9 @@ if arguments.contains("--help") || arguments.contains("-h") {
           apple-calendar-mcp --version    Print the version.
 
         Calendar access is granted from the AppleCalendarMCP window, not from here.
-        The agent restarts on its own to pick up a grant made while it runs.
+        The agent checks it afresh on every call, so withdrawing it takes effect
+        on the next one, and restarts on its own to pick up a grant made while
+        it runs.
 
         Internal:
           --access-state                  Print the permission state, as a new

@@ -4,12 +4,13 @@ import os
 
 /// The calendar permission as a new process sees it.
 ///
-/// A running process never sees a grant made elsewhere: measured on
-/// 2026-10-31, the agent kept reading `notDetermined` a minute after access was
-/// granted from the window, while a fresh process read `fullAccess`. Restarting
-/// the agent was enough. So while this one cannot read, it asks a child — which
-/// macOS attributes to this bundle, the agent being its own responsible
-/// process — and restarts when the child can.
+/// A running process never sees a change made elsewhere, either way. Measured
+/// on 2026-10-31: the agent kept reading `notDetermined` a minute after access
+/// was granted from the window, while a fresh process read `fullAccess`; and
+/// after the grant was withdrawn, an agent started before kept listing
+/// calendars and reading events. So every call asks a child — which macOS
+/// attributes to this bundle, the agent being its own responsible process —
+/// and goes by its answer, not by this process's.
 enum FreshAccessState {
 
     /// The argument that runs this executable as that child.
@@ -22,8 +23,14 @@ enum FreshAccessState {
     static let settleTime: Duration = .seconds(10)
 
     enum Outcome: Equatable {
-        /// Nothing new: report the state this process sees.
-        case unchanged
+        /// Both can read: go ahead.
+        case proceed
+        /// A new process cannot read, whatever this one believes: refuse, and
+        /// say why in the terms of the state it sees.
+        case refuse(AccessState)
+        /// No answer from the child. Refused rather than trusted: a guarantee
+        /// that lapses silently whenever the check cannot run is no guarantee.
+        case unconfirmed
         /// Granted since this process started: restart to pick it up.
         case restart
         /// A process that already started after the grant still cannot read.
@@ -31,7 +38,9 @@ enum FreshAccessState {
     }
 
     static func decide(inProcess state: AccessState, fresh: AccessState?, uptime: Duration) -> Outcome {
-        guard !state.canRead, fresh?.canRead == true else { return .unchanged }
+        guard let fresh else { return .unconfirmed }
+        guard fresh.canRead else { return .refuse(fresh) }
+        if state.canRead { return .proceed }
         return uptime >= settleTime ? .restart : .disagreement
     }
 
@@ -40,8 +49,9 @@ enum FreshAccessState {
         AccessState(rawValue: output.trimmingCharacters(in: .whitespacesAndNewlines))
     }
 
-    /// Runs the child and reads its answer. Nil if it could not be run, failed,
-    /// or took longer than `timeout` — in which case it is left to end alone:
+    /// Runs the child and reads its answer. Nil — and the call refused — if it
+    /// could not be run, failed, or took longer than `timeout`, in which case
+    /// it is left to end alone:
     /// killing it by pid afterwards could hit a process that reused the number.
     static func read(timeout: Duration = .seconds(5)) async -> AccessState? {
         guard let path = Bundle.main.executablePath else { return nil }

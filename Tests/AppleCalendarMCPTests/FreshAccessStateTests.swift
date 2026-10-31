@@ -2,28 +2,40 @@ import AppleCalendarSetup
 import Testing
 @testable import AppleCalendarMCP
 
-/// A running agent never sees a grant made elsewhere — measured on
-/// 2026-10-31. It restarts when a new process can read and it cannot, and
-/// only then.
+/// A running agent never sees a change made elsewhere, either way — measured
+/// on 2026-10-31. Every call goes by what a new process sees.
 struct FreshAccessStateTests {
     private let settled = FreshAccessState.settleTime + .seconds(1)
+
+    @Test("Goes ahead only when both can read")
+    func proceed() {
+        #expect(FreshAccessState.decide(inProcess: .fullAccess, fresh: .fullAccess, uptime: settled) == .proceed)
+    }
+
+    @Test("A withdrawn grant is refused, whatever this process believes", arguments: [
+        (AccessState.fullAccess, AccessState.notDetermined),
+        (.fullAccess, .denied),
+        (.fullAccess, .writeOnly),
+        (.fullAccess, .restricted),
+        (.notDetermined, .notDetermined),
+        (.denied, .writeOnly),
+    ])
+    func refuse(_ state: AccessState, _ fresh: AccessState) {
+        #expect(FreshAccessState.decide(inProcess: state, fresh: fresh, uptime: settled) == .refuse(fresh))
+    }
+
+    @Test("No answer from the child is refused, not trusted", arguments: [
+        AccessState.fullAccess, .notDetermined,
+    ])
+    func unconfirmed(_ state: AccessState) {
+        #expect(FreshAccessState.decide(inProcess: state, fresh: nil, uptime: settled) == .unconfirmed)
+    }
 
     @Test("Restarts when a new process can read and this one cannot", arguments: [
         AccessState.notDetermined, .denied, .writeOnly,
     ])
     func restart(_ state: AccessState) {
         #expect(FreshAccessState.decide(inProcess: state, fresh: .fullAccess, uptime: settled) == .restart)
-    }
-
-    @Test("Stays when there is nothing new to see", arguments: [
-        (AccessState.fullAccess, AccessState?.some(.fullAccess)),
-        (.fullAccess, .some(.notDetermined)),
-        (.notDetermined, .some(.notDetermined)),
-        (.denied, .some(.writeOnly)),
-        (.notDetermined, nil),
-    ])
-    func unchanged(_ state: AccessState, _ fresh: AccessState?) {
-        #expect(FreshAccessState.decide(inProcess: state, fresh: fresh, uptime: settled) == .unchanged)
     }
 
     @Test("An agent that started after the grant does not restart again")
