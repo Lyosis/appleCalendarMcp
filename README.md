@@ -35,7 +35,10 @@ refused too, instead of answering "no events".
 
 A recurring event is never addressed by default. Pass `occurrenceStart` with
 `span` set to `thisEvent` or `futureEvents`, or `span: "series"` for every
-occurrence; anything else is refused and nothing changes.
+occurrence; anything else is refused and nothing changes. `span: "series"`
+takes no new start or end: given one date, the whole series moved there and
+the occurrences before it vanished. Moving a series means addressing its first
+occurrence with `futureEvents`, which the refusal names.
 
 Event titles, locations, notes and attendee names are written by other people
 and arrive unfiltered from invitations. Responses carrying them say so, and the
