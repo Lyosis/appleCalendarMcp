@@ -23,16 +23,10 @@ extension Server {
                     """
                     Report whether this server may read and write Calendar events, and \
                     what to do about it if not. Use this first when another calendar \
-                    tool fails.
+                    tool fails. It never asks for access: the person grants it from \
+                    the AppleCalendarMCP app.
                     """,
-                    properties: [
-                        "request": schema(
-                            "boolean",
-                            """
-                            Ask the system for access when no decision has been recorded \
-                            yet, which may show a permission prompt. Defaults to false.
-                            """)
-                    ]),
+                    properties: [:]),
                 tool(
                     "list_calendars",
                     """
@@ -190,7 +184,7 @@ extension Server {
 
         do {
             switch name {
-            case "check_access": return await checkAccess(arguments)
+            case "check_access": return await checkAccess()
             case "list_calendars": return try await listCalendars()
             case "list_events": return try await listEvents(arguments)
             case "search_events": return try await searchEvents(arguments)
@@ -209,22 +203,15 @@ extension Server {
 
     // MARK: - Access
 
-    private func checkAccess(_ arguments: JSONValue) async -> JSONValue {
-        var state = CalendarPermission.current()
-        var prompted = false
-
-        if arguments["request"]?.boolValue == true, state == .notDetermined {
-            prompted = true
-            state = await calendar.requestAccess().state
-            await calendar.reset()
-        }
+    private func checkAccess() async -> JSONValue {
+        let state = CalendarPermission.current()
+        let explanation = state.canRead ? state.adviceForClient : await adviceWhenUnreadable(state)
 
         return toolResult(
             JSONValue.object([
                 "status": .string(state.rawValue),
                 "canReadEvents": .bool(state.canRead),
-                "explanation": .string(state.explanation),
-                "promptRequested": .bool(prompted),
+                "explanation": .string(explanation),
                 "changeJournal": .string(journal.path),
             ]).prettyPrinted(),
             isError: !state.canRead
@@ -232,15 +219,26 @@ extension Server {
     }
 
     /// EventKit has no read-only level: reading anything needs full access.
+    /// Never asks for it — see `AccessState.adviceForClient`.
     private func ensureAccess() async throws {
-        var state = CalendarPermission.current()
-        if state == .notDetermined {
-            state = await calendar.requestAccess().state
-            await calendar.reset()
-        }
+        let state = CalendarPermission.current()
         guard state.canRead else {
-            throw ToolFailure(
-                "\(state.explanation) Run `apple-calendar-mcp --selftest` to see the details.")
+            throw ToolFailure(await adviceWhenUnreadable(state))
+        }
+    }
+
+    /// This process cannot read, but may simply be older than the grant: a
+    /// new one tells. See `FreshAccessState`.
+    private func adviceWhenUnreadable(_ state: AccessState) async -> String {
+        let fresh = await FreshAccessState.read()
+        switch FreshAccessState.decide(inProcess: state, fresh: fresh, uptime: AgentRestart.uptime) {
+        case .unchanged:
+            return "\(state.adviceForClient) Run `apple-calendar-mcp --selftest` to see the details."
+        case .restart:
+            AgentRestart.request()
+            return AccessState.grantedSinceStart
+        case .disagreement:
+            return AccessState.disagreement
         }
     }
 

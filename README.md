@@ -113,6 +113,13 @@ system rather than a checkbox recording what was once done, so revoking a
 permission in System Settings shows up here. It also says which client is
 allowed, and prints the configuration line to paste into Claude Desktop.
 
+The helper never asks for calendar access itself: it is granted here. A
+helper already running when you grant it does not see the grant — macOS keeps
+the status it read first — so the next calendar call answers that access was
+just granted and to call again, and the helper restarts to pick it up. Turning
+access back on in System Settings takes the same path; that case is covered by
+tests, not yet measured live.
+
 Available in English and French, following the system language. The command
 line, the logs and the MCP tool descriptions stay in English: tool descriptions
 are read by models, and diagnostics end up in public issues.
