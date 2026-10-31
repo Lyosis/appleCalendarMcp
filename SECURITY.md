@@ -146,6 +146,16 @@ attributes a privacy request to the responsible process up the launch chain,
 Apple documents this nowhere, and if it changes, access stops being granted
 silently. Run `apple-calendar-mcp --selftest` when anything misbehaves.
 
+**The selftest relies on a private call.** To measure the agent's permission
+rather than the terminal's, `--selftest` starts itself again with
+`responsibility_spawnattrs_setdisclaim`, which is in no public header — Claude's
+own `disclaimer` uses it. It is looked up at run time: without it the selftest
+reports the caller's status as such and ends incomplete. Being disclaimed gives
+it nothing that any process cannot already get, as main.swift explains, and it
+still prints counts only and never asks for access. Its "permission measured
+for" line trusts that the call succeeded; it cannot ask macOS whom it holds
+responsible.
+
 ## Reporting
 
 Open an issue, or write to wilfrid_dev@proton.me for anything you would rather

@@ -14,7 +14,10 @@ import Security
 ///
 /// Anything can run this with the calendar grant in hand (see main.swift), so
 /// it never asks for access and never prints a calendar's name: counts only.
-func runSelfTest() async -> Bool {
+///
+/// The permission is only the agent's when `attribution` is `.own`. Otherwise
+/// it belongs to whatever started this, and is reported as such, not judged.
+func runSelfTest(attribution: SelfTestAttribution) async -> Bool {
     var passed = true
 
     func check(_ label: String, _ value: String, ok: Bool?) {
@@ -23,7 +26,7 @@ func runSelfTest() async -> Bool {
         case false: "FAIL"
         case nil: "    "
         }
-        print("  [\(mark)] \(label.padding(toLength: 26, withPad: " ", startingAt: 0)) \(value)")
+        print("  [\(mark)] \(label.padding(toLength: 28, withPad: " ", startingAt: 0)) \(value)")
         if ok == false { passed = false }
     }
 
@@ -40,6 +43,12 @@ func runSelfTest() async -> Bool {
     // the agent plist, and which identity TCC records a decision against.
     check("bundle path", Bundle.main.bundlePath, ok: nil)
     check("parent process", parentProcessDescription(), ok: nil)
+    switch attribution {
+    case .own:
+        check("permission measured for", "this bundle (run disclaimed)", ok: true)
+    case .caller(let reason):
+        check("permission measured for", "THE CALLER, not the agent — \(reason)", ok: nil)
+    }
 
     // The usage description has to be readable at runtime or the system has no
     // text to put in the permission prompt. This is what proves -sectcreate
@@ -100,6 +109,15 @@ func runSelfTest() async -> Bool {
 
     print("authorization")
     let state = CalendarPermission.current()
+    guard attribution == .own else {
+        // Judging the caller's permission would report a fault that is not
+        // there — or hide one that is.
+        check("status", "\(state.rawValue) — the caller's, not the agent's", ok: nil)
+        print("  ...  ask Claude to run check_access, or open AppleCalendarMCP.app, for the agent's")
+        print("")
+        print("selftest INCOMPLETE — the agent's permission could not be measured from here")
+        return false
+    }
     check("status", state.rawValue, ok: state.canRead)
     check("meaning", state.explanation, ok: nil)
     if state == .notDetermined {

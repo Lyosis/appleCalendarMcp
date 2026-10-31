@@ -19,8 +19,10 @@ if arguments.contains("--help") || arguments.contains("-h") {
           apple-calendar-mcp              Serve MCP over XPC. This is how launchd starts
                                           the agent; MCP clients run the bridge instead.
           apple-calendar-mcp --selftest   Report identity, permission state and how many
-                                          calendars are visible. Exits non-zero if
-                                          anything is wrong.
+                                          calendars are visible, measured for this
+                                          bundle — the agent — not for the terminal
+                                          running it. Exits non-zero if anything is
+                                          wrong or could not be measured.
           apple-calendar-mcp --version    Print the version.
 
         Calendar access is granted from the AppleCalendarMCP window, not from here.
@@ -49,8 +51,24 @@ if arguments.contains("--agent-status") {
 }
 
 if arguments.contains("--selftest") {
-    let passed = await runSelfTest()
-    exit(passed ? 0 : 1)
+    if arguments.contains(DisclaimedSpawn.marker) {
+        exit(await runSelfTest(attribution: .ofDisclaimedRun()) ? 0 : 1)
+    }
+    // Run again as its own responsible process, so the permission measured is
+    // this bundle's — the agent's — and not the terminal's. See DisclaimedSpawn.
+    var reason = "the path of this executable is unknown"
+    if let path = Bundle.main.executablePath {
+        switch DisclaimedSpawn.run(path, arguments: ["--selftest", DisclaimedSpawn.marker]) {
+        case .exited(let status):
+            exit(status)
+        case .killed(let signal):
+            print("selftest FAILED — the disclaimed run was killed by signal \(signal)")
+            exit(1)
+        case .notStarted(let why):
+            reason = why
+        }
+    }
+    exit(await runSelfTest(attribution: .caller(reason)) ? 0 : 1)
 }
 
 // launchd passes none (see the launch agent plist), so anything left over is a
