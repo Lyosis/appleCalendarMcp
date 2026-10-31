@@ -55,8 +55,7 @@ extension CalendarAccess {
         to end: Date,
         duration: TimeInterval,
         calendarIDs: [String]?,
-        dayStartHour: Int,
-        dayEndHour: Int
+        hours: WorkingHours
     ) throws -> [DateInterval] {
         let busy = try events(from: start, to: end, calendarIDs: calendarIDs)
             .filter { Self.blocksTime(availability: $0.availability, isAllDay: $0.isAllDay) }
@@ -69,8 +68,7 @@ extension CalendarAccess {
             to: end,
             busy: Self.merge(busy),
             minimum: duration,
-            dayStartHour: dayStartHour,
-            dayEndHour: dayEndHour,
+            hours: hours,
             calendar: .current
         )
     }
@@ -101,8 +99,7 @@ extension CalendarAccess {
         to end: Date,
         busy merged: [DateInterval],
         minimum duration: TimeInterval,
-        dayStartHour: Int,
-        dayEndHour: Int,
+        hours: WorkingHours,
         calendar: Calendar
     ) -> [DateInterval] {
         var slots: [DateInterval] = []
@@ -110,10 +107,9 @@ extension CalendarAccess {
         var day = calendar.startOfDay(for: start)
 
         while day < end {
-            if let windowStart = calendar.date(bySettingHour: dayStartHour, minute: 0, second: 0, of: day),
-               let windowEnd = calendar.date(bySettingHour: dayEndHour, minute: 0, second: 0, of: day) {
-                let lower = max(windowStart, start)
-                let upper = min(windowEnd, end)
+            if let window = hours.window(on: day, calendar: calendar) {
+                let lower = max(window.start, start)
+                let upper = min(window.end, end)
                 if lower < upper {
                     // Intervals over before this window can only be over
                     // before every later one too.

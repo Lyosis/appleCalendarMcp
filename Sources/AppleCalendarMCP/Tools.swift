@@ -93,8 +93,12 @@ extension Server {
                         "end": schema("string", "End of the range to search, ISO 8601."),
                         "durationMinutes": schema("integer", "How long the opening must be."),
                         "calendarIds": arraySchema("Consider only these calendars as busy."),
-                        "dayStartHour": schema("integer", "First hour of the working day, 0-23. Defaults to 9."),
-                        "dayEndHour": schema("integer", "Last hour of the working day, 0-23. Defaults to 18."),
+                        "dayStartHour": schema(
+                            "integer",
+                            "Hour the working day starts, 0-23, in the Mac's time zone. Defaults to 9."),
+                        "dayEndHour": schema(
+                            "integer",
+                            "Hour the working day ends, 1-24 and after dayStartHour; 24 is midnight. Defaults to 18."),
                     ],
                     required: ["start", "end", "durationMinutes"]),
                 tool(
@@ -274,14 +278,14 @@ extension Server {
         guard let minutes = arguments["durationMinutes"]?.intValue, minutes > 0 else {
             throw ToolFailure("durationMinutes must be a positive number of minutes.")
         }
+        let hours = try WorkingHours(arguments: arguments)
 
         let slots = try await calendar.freeSlots(
             from: range.start,
             to: range.end,
             duration: Double(minutes) * 60,
             calendarIDs: calendarIDs(arguments),
-            dayStartHour: arguments["dayStartHour"]?.intValue ?? 9,
-            dayEndHour: arguments["dayEndHour"]?.intValue ?? 18
+            hours: hours
         )
 
         return toolResult(
