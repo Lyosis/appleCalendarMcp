@@ -274,7 +274,11 @@ So the first thing to run when anything goes wrong is:
 apple-calendar-mcp --selftest
 ```
 
-It reports the real authorization status, the process macOS sees, whether the
+It reports the agent's authorization status — not the terminal's: it runs
+itself again as its own responsible process, the way Claude Desktop starts MCP
+servers, so macOS checks the grant this bundle holds. If that is not possible,
+it says the status shown is the caller's and ends "INCOMPLETE" rather than
+"FAILED". It also reports the process macOS sees, whether the
 usage description is readable at runtime, whether the bridge beside it carries
 the signing identifier the helper requires, and how many calendars of each kind
 are actually visible — counts only, never their names, so the output is safe to
