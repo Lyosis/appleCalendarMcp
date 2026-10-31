@@ -39,22 +39,11 @@ actor CalendarAccess {
     /// can reach it. It still never leaves the actor.
     let store = EKEventStore()
 
-    /// Asks for full access on this actor's own store, so that the store which
-    /// will do the reading is the one that saw the grant.
-    func requestAccess() async -> (granted: Bool, state: AccessState, error: String?) {
-        do {
-            let granted = try await store.requestFullAccessToEvents()
-            return (granted, CalendarPermission.current(), nil)
-        } catch {
-            return (false, CalendarPermission.current(), error.localizedDescription)
-        }
-    }
-
     /// Every event calendar the store can see.
     ///
-    /// Callers that have just crossed the not-determined boundary must call
-    /// `reset()` first: Apple's documentation is explicit that a store queried
-    /// before access was granted keeps returning nothing afterwards.
+    /// Access is granted from the setup window, in another process, and this
+    /// one never sees it: the status it read first stays frozen. So it never
+    /// runs with a store from before the grant — see `FreshAccessState`.
     func calendars() -> [CalendarInfo] {
         let defaultIdentifier = store.defaultCalendarForNewEvents?.calendarIdentifier
         return store.calendars(for: .event)
@@ -70,11 +59,6 @@ actor CalendarAccess {
                 )
             }
             .sorted { ($0.source, $0.title) < ($1.source, $1.title) }
-    }
-
-    /// Discards cached state. Required after access is granted mid-process.
-    func reset() {
-        store.reset()
     }
 
     // MARK: - Conversion

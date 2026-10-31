@@ -26,6 +26,11 @@ if arguments.contains("--help") || arguments.contains("-h") {
           apple-calendar-mcp --version    Print the version.
 
         Calendar access is granted from the AppleCalendarMCP window, not from here.
+        The agent restarts on its own to pick up a grant made while it runs.
+
+        Internal:
+          --access-state                  Print the permission state, as a new
+                                          process sees it. The agent runs this.
 
         Helper agent (only from inside the helper .app bundle):
           --register-agent                Register the launch agent with launchd.
@@ -35,6 +40,14 @@ if arguments.contains("--help") || arguments.contains("-h") {
         Only Claude Desktop may use the calendar. That is compiled in, not a
         setting: see SECURITY.md.
         """)
+    exit(0)
+}
+
+// The child the agent runs to see a grant made since it started: a new process
+// reads the permission afresh, a running one never does. The status only —
+// what --selftest shows anyway — never events, and it never asks.
+if arguments.contains(FreshAccessState.argument) {
+    print(CalendarPermission.current().rawValue)
     exit(0)
 }
 

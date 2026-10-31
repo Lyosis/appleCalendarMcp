@@ -33,6 +33,7 @@ func runXPCService(server: Server) -> Never {
     }
 
     log("listening on \(machServiceName)")
+    AgentRestart.markStarted()
     xpc_connection_resume(listener)
     dispatchMain()
 }
@@ -87,6 +88,7 @@ private func accept(_ connection: xpc_connection_t, server: Server) {
                 xpc_dictionary_set_string(reply, IPCKey.response, response)
             }
             xpc_connection_send_message(peer.value, reply)
+            AgentRestart.afterReply(on: peer.value)
         }
     }
 
