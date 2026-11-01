@@ -81,6 +81,14 @@ func runSelfTest(attribution: SelfTestAttribution) async -> Bool {
             "\(found ?? "unreadable") vs \(bridgeSigningIdentifier)",
             ok: found == bridgeSigningIdentifier
         )
+        // The bridge carries its own plist, a separate file in the sources:
+        // nothing at run time reads its version, so drift would ship unseen.
+        let bridgeVersion = embeddedVersion(ofExecutableAt: bridge)
+        check(
+            "bridge version matches",
+            "\(bridgeVersion ?? "unreadable") vs \(serverVersion)",
+            ok: bridgeVersion == serverVersion
+        )
     } else {
         check("bridge identifier", "no bridge beside this executable", ok: nil)
     }
@@ -165,6 +173,13 @@ func runSelfTest(attribution: SelfTestAttribution) async -> Bool {
 }
 
 /// The signing identifier recorded in an executable's code signature.
+/// The version in the plist an executable carries in its `__info_plist`
+/// section. Nil for one without.
+private func embeddedVersion(ofExecutableAt url: URL) -> String? {
+    let info = CFBundleCopyInfoDictionaryForURL(url as CFURL) as? [String: Any]
+    return info?["CFBundleShortVersionString"] as? String
+}
+
 private func signingIdentifier(ofExecutableAt url: URL) -> String? {
     var staticCode: SecStaticCode?
     guard SecStaticCodeCreateWithPath(url as CFURL, [], &staticCode) == errSecSuccess,

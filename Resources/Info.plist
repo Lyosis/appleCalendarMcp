@@ -20,7 +20,8 @@
 	<string>AppleCalendarMCP</string>
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
-	<!-- Kept in step with serverVersion by --selftest, which fails on drift. -->
+	<!-- Must equal serverVersion (Version.swift): VersionTests fails on drift in
+	     the sources, and --selftest on the installed bundle. -->
 	<key>CFBundleShortVersionString</key>
 	<string>0.1.0</string>
 	<key>CFBundleVersion</key>
