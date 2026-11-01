@@ -32,22 +32,8 @@ struct WorkingHours: Equatable, Sendable {
     init(arguments: JSONValue) throws {
         let defaults = try WorkingHours()
         try self.init(
-            start: try Self.hour(arguments, "dayStartHour") ?? defaults.start,
-            end: try Self.hour(arguments, "dayEndHour") ?? defaults.end)
-    }
-
-    /// Nil when absent. A value that is not a whole number is an error, not
-    /// rounded and not replaced by the default: either would answer a
-    /// different question than the one asked.
-    private static func hour(_ arguments: JSONValue, _ key: String) throws -> Int? {
-        guard let value = arguments[key] else { return nil }
-        guard let number = value.doubleValue,
-              number.rounded() == number,
-              let whole = Int(exactly: number)
-        else {
-            throw ToolFailure("\(key) must be a whole number of hours.")
-        }
-        return whole
+            start: try WholeNumber.read(arguments, "dayStartHour", unit: "hours") ?? defaults.start,
+            end: try WholeNumber.read(arguments, "dayEndHour", unit: "hours") ?? defaults.end)
     }
 
     /// The window on `day`, which must be the start of a day. Nil if the

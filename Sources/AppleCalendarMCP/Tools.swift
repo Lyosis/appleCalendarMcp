@@ -107,7 +107,7 @@ extension Server {
                         "location": schema("string", "Where it happens."),
                         "notes": schema("string", "Free text attached to the event."),
                         "url": schema("string", "A link to attach: http, https or mailto only."),
-                        "alarmMinutesBefore": schema("integer", "Add an alert this many minutes beforehand."),
+                        "alarmMinutesBefore": schema("integer", "Add an alert this many whole minutes before the start: 0 (at the start) to \(AlarmMinutes.maximum) (four weeks)."),
                     ],
                     required: ["title", "start", "end"]),
                 tool(
@@ -323,14 +323,20 @@ extension Server {
         draft.location = arguments["location"]?.stringValue
         draft.notes = arguments["notes"]?.stringValue
         draft.url = try arguments["url"]?.stringValue.map(EventLink.change(from:))
-        draft.alarmMinutesBefore = arguments["alarmMinutesBefore"]?.intValue
+        draft.alarmMinutesBefore = try AlarmMinutes.read(arguments)
 
         try await ensureJournal()
         let event = try await calendar.create(draft)
         let journalFailure = await journalled { try await journal.recordCreation(event) }
 
+        var created = event.json(includeDetails: true)
+        if !event.alarmMinutesBefore.isEmpty, case .object(var members) = created {
+            // Read back from the saved event, not echoed from the arguments.
+            members["alarmMinutesBefore"] = .array(event.alarmMinutesBefore.map { .int($0) })
+            created = .object(members)
+        }
         return writeResult([
-            "created": event.json(includeDetails: true),
+            "created": created,
         ], journalFailure: journalFailure)
     }
 

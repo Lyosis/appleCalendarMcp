@@ -193,6 +193,10 @@ struct EventInfo: Sendable {
     let notes: String?
     let url: String?
     let attendees: [String]
+    /// Alerts set relative to the start, in whole minutes before it, as read
+    /// back from the saved event. Only `create_event` reports them, so the
+    /// caller sees what was actually set.
+    let alarmMinutesBefore: [Int]
 
     init(_ event: EKEvent) {
         id = event.eventIdentifier ?? ""
@@ -217,6 +221,11 @@ struct EventInfo: Sendable {
         notes = event.notes
         url = event.url?.absoluteString
         attendees = event.attendees?.compactMap { $0.name } ?? []
+        // A negative offset is before the start. Alerts at a fixed date have
+        // no offset, and are left out.
+        alarmMinutesBefore = (event.alarms ?? [])
+            .filter { $0.absoluteDate == nil }
+            .map { Int((-$0.relativeOffset / 60).rounded()) }
     }
 
     /// "every 2 weeks on Mon, Wed until 2027-06-30T00:00:00+02:00", and so on.
